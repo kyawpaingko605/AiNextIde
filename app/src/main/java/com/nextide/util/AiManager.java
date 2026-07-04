@@ -23,8 +23,8 @@ public class AiManager {
         android.content.SharedPreferences prefs = context.getSharedPreferences("ai_settings", Context.MODE_PRIVATE);
         String apiKey = prefs.getString("api_key", ""); 
         
-        // မြန်ဆန်ပြီး ကုဒ်ရေးသားမှု တိကျတဲ့ llama3-8b-8192 ကို Default ထားပါသည်
-        String modelName = prefs.getString("model_name", "llama3-8b-8192"); 
+        // 🟢 ပြင်ဆင်ချက်: Error 400 မတက်စေရန် လက်ရှိအလုပ်လုပ်နေသော အမြန်ဆုံး Model ဖြစ်သည့် llama-3.1-8b-instant ကို Default ပြောင်းထားပါသည်
+        String modelName = prefs.getString("model_name", "llama-3.1-8b-instant"); 
 
         if (apiKey.isEmpty()) {
             listener.onFixFailed("Groq API Key is missing. Please set it in Settings.");
@@ -59,7 +59,6 @@ public class AiManager {
         
         root.addProperty("temperature", 0.2); 
 
-        // 🟢 ပြင်ဆင်ချက်: Formatting ကြောင့် JSON ကွဲအက်မှုမရှိစေရန် တိုက်ရိုက် String သုံး၍ RequestBody ဆောက်ခြင်း
         String jsonPayload = root.toString();
         RequestBody body = RequestBody.create(
                 jsonPayload,
@@ -67,10 +66,10 @@ public class AiManager {
         );
 
         // ၅။ Header တွင် Groq Bearer Token စနစ်တကျ ထည့်သွင်းခြင်း
+        // 🟢 ပြင်ဆင်ချက်: OkHttp တွင် MediaType ထည့်ပြီးသားဖြစ်၍ duplicate Content-Type header အား ဖယ်ရှားထားပါသည်
         Request request = new Request.Builder()
                 .url(GROQ_API_URL)
                 .addHeader("Authorization", "Bearer " + apiKey.trim())
-                .addHeader("Content-Type", "application/json")
                 .post(body)
                 .build();
 
@@ -85,7 +84,6 @@ public class AiManager {
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful() || responseBody == null) {
-                        // Error ဖြစ်ပါက ဆာဗာမှ ပြန်လာသော Message အသေးစိတ်ကိုပါ ထုတ်ပြရန် ပြင်ဆင်ထားပါသည်
                         String errorBodyStr = responseBody != null ? responseBody.string() : "No error body";
                         listener.onFixFailed("Groq API Error Code: " + response.code() + "\nDetails: " + errorBodyStr);
                         return;
