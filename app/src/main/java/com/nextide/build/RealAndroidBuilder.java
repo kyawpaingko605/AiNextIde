@@ -36,7 +36,7 @@ public class RealAndroidBuilder {
     public void buildProject(File projectRootDir, BuildListener listener) {
         executor.submit(() -> {
             try {
-                // Build Cache ရှင်းလင်းရေးနှင့် Folder များဆောက်ခြင်း
+                // Cache ရှင်းလင်းရေးနှင့် Folder များတည်ဆောက်ခြင်း
                 File cacheBin = new File(context.getCodeCacheDir(), "build_bin");
                 if (cacheBin.exists()) deleteFolder(cacheBin);
                 cacheBin.mkdirs();
@@ -47,18 +47,18 @@ public class RealAndroidBuilder {
                 File genDir = new File(cacheBin, "gen");
                 genDir.mkdirs();
 
-                // ၁။ Project Directory ပုံစံအား ညှိယူခြင်း
+                // ၁။ Project Directory လမ်းကြောင်း ညှိယူခြင်း
                 File actualProjectDir = projectRootDir;
                 File appFolder = new File(projectRootDir, "app");
                 if (appFolder.exists() && appFolder.isDirectory()) {
                     actualProjectDir = appFolder;
                 }
 
-                // ၂။ AAPT2 Tool အား Execute ရနိုင်သော Safe Zone သို့ ထုတ်ယူပြင်ဆင်ခြင်း
+                // ၂။ AAPT2 Tool အား Permission Denied မဖြစ်စေရန် Private Execute Zone သို့ ထုတ်ယူခြင်း
                 emitLog(listener, "[1/5] Preparing AAPT2 packaging tool...");
                 File aapt2Tool = getAapt2Executable(listener);
                 if (aapt2Tool == null) {
-                    emitFailed(listener, "Error: Unable to load or prepare Native AAPT2 Binary.");
+                    emitFailed(listener, "Error: Unable to load or prepare Executable AAPT2 Binary.");
                     return;
                 }
 
@@ -70,7 +70,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // ၄။ AAPT2 Resource Compilation စတင်ခြင်း
+                // ၄။ AAPT2 Resource Compilation & Linking စတင်ခြင်း
                 emitLog(listener, "[2/5] Compiling Android resources via AAPT2...");
                 
                 File resDir = new File(actualProjectDir, "src/main/res");
@@ -84,7 +84,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // အဆင့် (က) - Resource Xml ဖိုင်များကို တစ်ဖိုင်ချင်း Flat ဖိုင်ပြောင်းခြင်း
+                // အဆင့် (က) - XML Resource များကို တစ်ဖိုင်ချင်း Flat ဖိုင်ပြောင်းခြင်း
                 boolean compileResSuccess = runAapt2Compile(aapt2Tool, resDir, compiledResDir, listener);
                 if (!compileResSuccess) {
                     emitFailed(listener, "AAPT2 Resource Compilation (Flat files creation) Failed.");
@@ -153,28 +153,40 @@ public class RealAndroidBuilder {
         });
     }
 
-    // 🟢 AIDE Style Fix: Permission Denied လုံးဝမဖြစ်စေရန် App Execute Zone သို့ ပြောင်းရွှေ့ပေးခြင်း
+    // AIDE/IDE Style: jniLibs/arm64-v8a ထဲက libaapt2.so ကို ဆွဲထုတ်ပြီး Execution Run အောင် ပြင်ဆင်ခြင်း
     private File getAapt2Executable(BuildListener listener) {
         try {
             File binDir = context.getDir("bin", Context.MODE_PRIVATE);
             File aapt2File = new File(binDir, "aapt2");
 
             if (aapt2File.exists()) {
-                aapt2File.delete();
+                aapt2File.delete(); 
             }
 
             String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
-            File libAapt2 = new File(nativeLibDir, "libaapt2.so");
+            File libAapt2 = new File(nativeLibDir, "libaapt2.so"); 
 
             boolean copied = false;
             if (libAapt2.exists()) {
+                emitLog(listener, "  -> Found libaapt2.so in nativeLibraryDir, copying...");
                 copied = copyFile(libAapt2, aapt2File);
             } else {
-                copied = extractAssetFile("bin/aapt2", aapt2File);
+                File altAapt2 = new File(nativeLibDir, "aapt2");
+                if (altAapt2.exists()) {
+                    emitLog(listener, "  -> Found aapt2 in nativeLibraryDir, copying...");
+                    copied = copyFile(altAapt2, aapt2File);
+                } else {
+                    emitLog(listener, "  -> Native binary not found in jniLibs, extracting from assets...");
+                    copied = extractAssetFile("bin/aapt2", aapt2File);
+                }
             }
 
-            if (!copied) return null;
+            if (!copied) {
+                emitLog(listener, "  -> [ERROR] Failed to copy or extract AAPT2 binary.");
+                return null;
+            }
 
+            // Linux Permissions အပြည့်အဝပေးခြင်း (chmod 755)
             aapt2File.setReadable(true, false);
             aapt2File.setExecutable(true, false);
 
@@ -182,14 +194,18 @@ public class RealAndroidBuilder {
             chmodProc.waitFor();
 
             if (aapt2File.canExecute()) {
+                emitLog(listener, "  -> AAPT2 Executable successfully initialized.");
                 return aapt2File;
+            } else {
+                emitLog(listener, "  -> [ERROR] Target binary is still not executable.");
             }
         } catch (Exception e) {
-            emitLog(listener, "  -> Executable Extraction Exception: " + e.getMessage());
+            emitLog(listener, "  -> Executable Exception: " + e.getMessage());
         }
         return null;
     }
 
+    // AAPT2 Compile System - Output Parameter ကို ရှေ့သို့ပို့ပြီး Sequence ညှိထားသည်
     private boolean runAapt2Compile(File aapt2, File resDir, File outputDir, BuildListener listener) {
         try {
             List<File> allResFiles = new ArrayList<>();
@@ -200,21 +216,21 @@ public class RealAndroidBuilder {
             for (File resFile : allResFiles) {
                 if (resFile.isDirectory() || resFile.getName().startsWith(".")) continue;
 
-                ProcessBuilder pb = new ProcessBuilder(
-                        aapt2.getAbsolutePath(),
-                        "compile",
-                        resFile.getAbsolutePath(),
-                        "-o", outputDir.getAbsolutePath()
-                );
+                List<String> command = new ArrayList<>();
+                command.add(aapt2.getAbsolutePath());
+                command.add("compile");
+                command.add("-o");
+                command.add(outputDir.getAbsolutePath());
+                command.add(resFile.getAbsolutePath());
+
+                ProcessBuilder pb = new ProcessBuilder(command);
                 pb.redirectErrorStream(true);
                 Process p = pb.start();
 
                 BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
                 String line;
                 while ((line = br.readLine()) != null) {
-                    if (line.contains("error:")) {
-                        emitLog(listener, "AAPT2 Compile Error: " + line);
-                    }
+                    emitLog(listener, "AAPT2 Compile: " + line);
                 }
                 if (p.waitFor() != 0) return false;
             }
@@ -224,7 +240,7 @@ public class RealAndroidBuilder {
         }
     }
 
-    // 🟢 AIDE Style Fix: Arguments များကို တိကျမှန်ကန်သော အသုံးအနှုန်းများဖြင့်သာ သတ်မှတ်ခြင်း
+    // AAPT2 Link System - Argument အမှန်ဖြစ်သော --java-output ကို သုံးထားသည်
     private boolean runAapt2Link(File aapt2, File androidJar, File manifest, File compiledResDir, File genDir, File outputAp_, BuildListener listener) {
         try {
             List<String> command = new ArrayList<>();
@@ -235,14 +251,12 @@ public class RealAndroidBuilder {
             command.add("-I");
             command.add(androidJar.getAbsolutePath());
             
-            // AIDE နှင့် standard tool များတွင် သုံးသော argument စစ်စစ်ဖြစ်သည့် --java-output ကို သုံးပါသည်
             command.add("--java-output"); 
             command.add(genDir.getAbsolutePath());
             
             command.add("-o");
             command.add(outputAp_.getAbsolutePath());
 
-            // Flat ဖိုင်များကို command ထဲသို့ စုထည့်ခြင်း
             File[] flatFiles = compiledResDir.listFiles();
             if (flatFiles != null) {
                 for (File f : flatFiles) {
