@@ -10,7 +10,6 @@ import java.io.IOException;
 
 public class AiManager {
 
-    // 🟢 Groq API Endpoint ဖြစ်ပါတယ်
     private static final String GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
     public interface AiFixListener {
@@ -19,19 +18,17 @@ public class AiManager {
     }
 
     public static void requestAutoFix(Context context, File targetFile, String errorLog, AiFixListener listener) {
-        // ၁။ SharedPreferences ထဲကနေ User ထည့်ထားတဲ့ Groq API Key ကို လှမ်းယူပါမယ်
         android.content.SharedPreferences prefs = context.getSharedPreferences("ai_settings", Context.MODE_PRIVATE);
         String apiKey = prefs.getString("api_key", ""); 
         
-        // 🟢 ပြင်ဆင်ချက်: Error 400 မတက်စေရန် လက်ရှိအလုပ်လုပ်နေသော အမြန်ဆုံး Model ဖြစ်သည့် llama-3.1-8b-instant ကို Default ပြောင်းထားပါသည်
-        String modelName = prefs.getString("model_name", "llama-3.1-8b-instant"); 
+        // 🟢 လက်ရှိအလုပ်လုပ်နေသော Model အမှန်ဖြစ်ကြောင်း သေချာစေရန် .trim() သုံးထားပါသည်
+        String modelName = prefs.getString("model_name", "llama-3.1-8b-instant").trim(); 
 
         if (apiKey.isEmpty()) {
             listener.onFixFailed("Groq API Key is missing. Please set it in Settings.");
             return;
         }
 
-        // ၂။ ဖိုင်ထဲက လက်ရှိ Error တက်နေတဲ့ ကုဒ်အဟောင်းကို ဖတ်ယူခြင်း
         String currentCode = "";
         try {
             currentCode = FileUtils.readFile(targetFile);
@@ -39,37 +36,35 @@ public class AiManager {
             currentCode = "// (Could not read file content)";
         }
 
-        // ၃။ Groq AI နားလည်အောင် Prompt ပုံစံ ပြင်ဆင်ခြင်း
         String prompt = "You are an expert Android developer. Fix the compile errors in this Java file.\n\n"
                 + "CURRENT CODE:\n" + currentCode + "\n\n"
                 + "BUILD ERROR LOG:\n" + errorLog + "\n\n"
                 + "Respond ONLY with the complete, fixed Java source code inside a single standard markdown code block. Do not include any explanations.";
 
-        // ၄။ Groq API Request JSON Body ကို အမှားအယွင်းမရှိစေရန် တိကျစွာ ဆောက်ခြင်း
         Gson gson = new Gson();
         JsonObject root = new JsonObject();
-        root.addProperty("model", modelName.trim()); // ရှေ့နောက် Space များ ဖြတ်ပစ်ပါသည်
+        root.addProperty("model", modelName);
         
         JsonArray messages = new JsonArray();
         JsonObject messageObj = new JsonObject();
         messageObj.addProperty("role", "user");
-        messageObj.addProperty("content", prompt); // Gson မှ အလိုအလျောက် String Escape လုပ်ပေးပါမည်
+        messageObj.addProperty("content", prompt);
         messages.add(messageObj);
         root.add("messages", messages);
         
         root.addProperty("temperature", 0.2); 
 
         String jsonPayload = root.toString();
-        RequestBody body = RequestBody.create(
-                jsonPayload,
-                MediaType.get("application/json; charset=utf-8")
-        );
+        
+        // 🟢 OkHttp Version အားလုံးနှင့် အဆင်ပြေစေရန် MediaType သတ်မှတ်ပုံကို ပြောင်းလဲထားပါသည်
+        MediaType mediaType = MediaType.parse("application/json; charset=utf-8");
+        RequestBody body = RequestBody.create(mediaType, jsonPayload);
 
-        // ၅။ Header တွင် Groq Bearer Token စနစ်တကျ ထည့်သွင်းခြင်း
-        // 🟢 ပြင်ဆင်ချက်: OkHttp တွင် MediaType ထည့်ပြီးသားဖြစ်၍ duplicate Content-Type header အား ဖယ်ရှားထားပါသည်
+        // 🟢 ပြင်ဆင်ချက်: Error 400 လုံးဝမကျစေရန် Content-Type Header အား တိုက်ရိုက်ပြန်လည်ထည့်သွင်းပေးထားပါသည်
         Request request = new Request.Builder()
                 .url(GROQ_API_URL)
                 .addHeader("Authorization", "Bearer " + apiKey.trim())
+                .addHeader("Content-Type", "application/json")
                 .post(body)
                 .build();
 
@@ -92,13 +87,11 @@ public class AiManager {
                     String resStr = responseBody.string();
                     JsonObject resJson = gson.fromJson(resStr, JsonObject.class);
                     
-                    // Groq Response ထဲက စာသားကို ဆွဲထုတ်ခြင်း
                     String rawText = resJson.getAsJsonArray("choices")
                             .get(0).getAsJsonObject()
                             .getAsJsonObject("message")
                             .get("content").getAsString();
 
-                    // Code block (```java ... ```) ပါလာပါက ကုဒ်သီးသန့် သန့်စင်ထုတ်ယူခြင်း
                     String fixedCode = extractCodeFromMarkdown(rawText);
                     listener.onFixSuccess(fixedCode);
                 } catch (Exception e) {
