@@ -135,23 +135,37 @@ public class RealAndroidBuilder {
         });
     }
 
+    // 🟢 ပြင်ဆင်ချက်: Android 10+ W^X ပိတ်ပင်မှုကို ကျော်လွှားရန် codeCacheDir အစား filesDir (Internal Storage) ကို ပြောင်းသုံးထားပါသည်
     private File getAapt2Executable(BuildListener listener) {
         String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
         File libAapt2 = new File(nativeLibDir, "libaapt2.so");
 
         if (libAapt2.exists()) {
-            File cacheBin = new File(context.getCodeCacheDir(), "build_bin");
-            File fallbackFile = new File(cacheBin, "aapt2_jni");
-            if (copyFile(libAapt2, fallbackFile)) {
-                fallbackFile.setExecutable(true, false);
-                emitLog(listener, "  -> Native AAPT2 prepared safely from jniLibs.");
+            File binDir = new File(context.getFilesDir(), "bin");
+            if (!binDir.exists()) {
+                binDir.mkdirs();
+            }
+            File fallbackFile = new File(binDir, "aapt2");
+            
+            // အမြဲတမ်းအသစ်ထပ်မကူးဘဲ ဖိုင်မရှိမှသာ ကူးယူစေခြင်းဖြင့် build speed ကို ပိုမြန်စေပါသည်
+            if (!fallbackFile.exists()) {
+                if (!copyFile(libAapt2, fallbackFile)) {
+                    return null;
+                }
+            }
+            
+            // Linux Kernel အတွက် executable permission သတ်မှတ်ခြင်း
+            boolean executableSet = fallbackFile.setExecutable(true, false);
+            if (executableSet) {
+                emitLog(listener, "  -> Native AAPT2 prepared safely inside app internal storage.");
                 return fallbackFile;
+            } else {
+                emitLog(listener, "  -> Warning: Failed to set executable permission on AAPT2.");
             }
         }
         return null;
     }
 
-    // 🟢 ပြင်ဆင်ချက်: link ချိတ်ရာတွင် context sourceDir အစား အသစ်ထုတ်ယူထားသော androidJarFile ကို တိကျစွာသုံးထားပါသည်
     private boolean runAapt2Link(File aapt2, File androidJar, File manifest, File resDir, File genDir, File outputAp_, BuildListener listener) {
         try {
             ProcessBuilder pb = new ProcessBuilder(
@@ -206,7 +220,6 @@ public class RealAndroidBuilder {
         }
     }
 
-    // 🟢 ပြင်ဆင်ချက်: Classpath နေရာတွင် assets မှ ထုတ်ယူထားသော androidJar ရဲ့ absolute path ကို ထည့်သွင်းပေးလိုက်ပါသည်
     private boolean runEcj(List<File> javaFiles, File outputDir, File androidJar, BuildListener listener) {
         List<String> args = new ArrayList<>();
         args.add("-1.8");
