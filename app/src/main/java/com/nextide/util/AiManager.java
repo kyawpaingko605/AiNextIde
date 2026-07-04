@@ -39,13 +39,13 @@ public class AiManager {
             currentCode = "// (Could not read file content)";
         }
 
-        // ၃။ Groq AI နားလည်အောင် Prompt ပုံစံ စနစ်တကျ ပြင်ဆင်ခြင်း
+        // ၃။ Groq AI နားလည်အောင် Prompt ပုံစံ စနစ်တကျ ပြင်ဆင်ခြင်း (Escaping ပြဿနာမရှိစေရန် သန့်စင်ထားပါသည်)
         String prompt = "You are an expert Android developer. Fix the compile errors in this Java file.\n\n"
-                + "--- CURRENT CODE ---\n" + currentCode + "\n\n"
-                + "--- BUILD ERROR LOG ---\n" + errorLog + "\n\n"
+                + "CURRENT CODE:\n" + currentCode + "\n\n"
+                + "BUILD ERROR LOG:\n" + errorLog + "\n\n"
                 + "Respond ONLY with the complete, fixed Java source code inside a single standard markdown code block. Do not include any explanations.";
 
-        // ၄။ Groq API Request JSON Body ဆောက်ခြင်း (OpenAI Format အတိုင်းဖြစ်ပါတယ်)
+        // ၄။ Gson Object စနစ်ဖြင့် စနစ်တကျ JSON ပြောင်းခြင်း (Error 400 လုံးဝမတက်အောင် ကာကွယ်ပေးပါတယ်)
         Gson gson = new Gson();
         JsonObject root = new JsonObject();
         root.addProperty("model", modelName);
@@ -59,9 +59,10 @@ public class AiManager {
         
         root.addProperty("temperature", 0.2); // ကုဒ်တိကျမှုရှိစေရန် temperature ကို လျှော့ထားပါတယ်
 
+        // 🟢 ပြင်ဆင်ချက်: OkHttp 4.x နှင့် ကိုက်ညီသော RequestBody တည်ဆောက်ပုံသို့ ပြောင်းလဲခြင်း
         RequestBody body = RequestBody.create(
                 root.toString(),
-                MediaType.parse("application/json; charset=utf-8")
+                MediaType.get("application/json; charset=utf-8")
         );
 
         // ၅။ Header တွင် Groq Bearer Token ထည့်သွင်းခြင်း
@@ -83,7 +84,7 @@ public class AiManager {
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful() || responseBody == null) {
-                        listener.onFixFailed("Groq API Error Code: " + response.code());
+                        listener.onFixFailed("Groq API Error Code: " + response.code() + " - " + response.message());
                         return;
                     }
 
