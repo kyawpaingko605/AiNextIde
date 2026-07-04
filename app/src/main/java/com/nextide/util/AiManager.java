@@ -58,14 +58,17 @@ public class AiManager {
 
         String jsonPayload = root.toString();
         
-        // 🟢 OkHttp ဗားရှင်းအားလုံးနှင့် ကိုက်ညီစေရန် Content-Type ကို အောက်ပါအတိုင်း Null ဖြင့် တည်ဆောက်သည်
-        RequestBody body = RequestBody.create(null, jsonPayload);
+        // 🟢 OkHttp 4.12.0 နှင့် အကိုက်ညီဆုံးဖြစ်အောင် MediaType သတ်မှတ်ခြင်း
+        MediaType mediaType = MediaType.parse("application/json; charset=utf-8");
+        
+        // 🟢 400 Error ကင်းဝေးစေရန် OkHttp 4.x ရေးထုံးအမှန် (Content, MediaType) အတိုင်း တည်ဆောက်ခြင်း
+        RequestBody body = RequestBody.create(jsonPayload, mediaType);
 
-        // 🟢 ပြင်ဆင်ချက်- Error 400 လုံးဝမကျစေရန် Content-Type Header အား .header() ဖြင့် အသေအတည်ပြုပေးထားပါသည်
+        // 🟢 Header ကွန်ဖလစ်မဖြစ်စေရန်နှင့် စိတ်ချရစေရန် .header() ဖြင့်သာ တိုက်ရိုက်ထည့်သွင်းခြင်း
         Request request = new Request.Builder()
                 .url(GROQ_API_URL)
                 .header("Authorization", "Bearer " + apiKey.trim())
-                .header("Content-Type", "application/json") // Header ကို ဤနေရာမှ တိုက်ရိုက်ထိန်းချုပ်သည်
+                .header("Content-Type", "application/json; charset=utf-8")
                 .post(body)
                 .build();
 
