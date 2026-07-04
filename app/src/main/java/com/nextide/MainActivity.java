@@ -349,10 +349,10 @@ public class MainActivity extends AppCompatActivity {
                     if (result != null && result.getStatus() == BuildResult.Status.SUCCESS) {
                         Toast.makeText(MainActivity.this, "Build succeeded!", Toast.LENGTH_SHORT).show();
                     } else {
-                        // 🟢 ပြင်ဆင်ချက်: Build ကျလျှင် အလိုအလျောက်မခေါ်တော့ဘဲ Ask AI Button ပြပေးမည့် စနစ်ပြောင်းလိုက်ပါပြီ
+                        // 🟢 ပြင်ဆင်ချက်: Dialog စာသားအား Gemini အစား Groq AI သို့ အံကိုက် ပြောင်းလဲလိုက်ပါသည်
                         new AlertDialog.Builder(MainActivity.this)
                             .setTitle("Build Failed")
-                            .setMessage("Would you like Gemini AI to analyze and fix the errors?")
+                            .setMessage("Would you like Groq AI to analyze and fix the errors?")
                             .setPositiveButton("Ask AI", (dialog, which) -> {
                                 Toast.makeText(MainActivity.this, "AI is analyzing logs...", Toast.LENGTH_SHORT).show();
                                 
