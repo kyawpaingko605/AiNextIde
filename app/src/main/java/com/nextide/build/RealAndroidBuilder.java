@@ -54,7 +54,7 @@ public class RealAndroidBuilder {
                     actualProjectDir = appFolder;
                 }
 
-                // ၂။ AAPT2 Tool အား Permission Denied မဖြစ်စေရန် Private Execute Zone သို့ ထုတ်ယူခြင်း
+                // ၂။ AAPT2 Tool အား 32-bit / 64-bit Fallback စနစ်ဖြင့် စိတ်ချရဆုံး ပြင်ဆင်ခြင်း
                 emitLog(listener, "[1/5] Preparing AAPT2 packaging tool...");
                 File aapt2Tool = getAapt2Executable(listener);
                 if (aapt2Tool == null) {
@@ -84,7 +84,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // အဆင့် (က) - XML Resource များကို တစ်ဖိုင်ချင်း Flat ဖိုင်ပြောင်းခြင်း (Detailed Logging)
+                // အဆင့် (က) - XML Resource များကို တစ်ဖိုင်ချင်း Flat ဖိုင်ပြောင်းခြင်း
                 boolean compileResSuccess = runAapt2Compile(aapt2Tool, resDir, compiledResDir, listener);
                 if (!compileResSuccess) {
                     emitFailed(listener, "AAPT2 Resource Compilation (Flat files creation) Failed.");
@@ -153,6 +153,7 @@ public class RealAndroidBuilder {
         });
     }
 
+    // 🟢 32-bit ရော 64-bit ပါ တစ်ခုမရရင် တစ်ခု အလိုအလျောက် ခေါ်ယူပေးမည့် Fallback မက်သတ်
     private File getAapt2Executable(BuildListener listener) {
         try {
             File binDir = context.getDir("bin", Context.MODE_PRIVATE);
@@ -162,29 +163,51 @@ public class RealAndroidBuilder {
                 aapt2File.delete(); 
             }
 
+            String arch = System.getProperty("os.arch").toLowerCase();
+            emitLog(listener, "  -> Current Phone OS Architecture: " + arch);
+
             String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
             File libAapt2 = new File(nativeLibDir, "libaapt2.so"); 
 
             boolean copied = false;
+
+            // ၁။ jniLibs က သတ်မှတ်ပေးတဲ့ standard binary အား ကူးယူပြီး အရင်စမ်းသပ်ခြင်း
             if (libAapt2.exists()) {
-                emitLog(listener, "  -> Found libaapt2.so in nativeLibraryDir, copying...");
+                emitLog(listener, "  -> Testing native libaapt2.so from jniLibs...");
                 copied = copyFile(libAapt2, aapt2File);
-            } else {
-                File altAapt2 = new File(nativeLibDir, "aapt2");
-                if (altAapt2.exists()) {
-                    emitLog(listener, "  -> Found aapt2 in nativeLibraryDir, copying...");
-                    copied = copyFile(altAapt2, aapt2File);
+            } 
+            
+            // ၂။ jniLibs ထဲကဟာ အလုပ်မလုပ်ရင် သို့မဟုတ် ဖုန်း architecture ကွဲလွဲနေရင် Assets ထဲကနေ လှည့်ခေါ်ခြင်း
+            if (!copied || !testExecutable(aapt2File)) {
+                emitLog(listener, "  -> Standard native failed or incompatible. Initiating Cross-Architecture Fallback...");
+                
+                if (arch.contains("64")) {
+                    emitLog(listener, "  -> Attempting 64-bit extraction...");
+                    copied = extractAssetFile("bin/arm64-v8a/aapt2", aapt2File);
+                    
+                    // 64-bit မရခဲ့ရင် 32-bit ပြောင်းခေါ်ခြင်း
+                    if (!copied || !testExecutable(aapt2File)) {
+                        emitLog(listener, "  -> [FALLBACK] 64-bit binary cannot execute. Trying 32-bit (armeabi-v7a)...");
+                        copied = extractAssetFile("bin/armeabi-v7a/aapt2", aapt2File);
+                    }
                 } else {
-                    emitLog(listener, "  -> Native binary not found in jniLibs, extracting from assets...");
-                    copied = extractAssetFile("bin/aapt2", aapt2File);
+                    emitLog(listener, "  -> Attempting 32-bit extraction...");
+                    copied = extractAssetFile("bin/armeabi-v7a/aapt2", aapt2File);
+                    
+                    // 32-bit မရခဲ့ရင် 64-bit ပြောင်းခေါ်ခြင်း
+                    if (!copied || !testExecutable(aapt2File)) {
+                        emitLog(listener, "  -> [FALLBACK] 32-bit binary cannot execute. Trying 64-bit (arm64-v8a)...");
+                        copied = extractAssetFile("bin/arm64-v8a/aapt2", aapt2File);
+                    }
                 }
             }
 
             if (!copied) {
-                emitLog(listener, "  -> [ERROR] Failed to copy or extract AAPT2 binary.");
+                emitLog(listener, "  -> [ERROR] All available binaries and architectural fallbacks failed.");
                 return null;
             }
 
+            // Linux Permissions အပြည့်အဝပေးခြင်း (chmod 755)
             aapt2File.setReadable(true, false);
             aapt2File.setExecutable(true, false);
 
@@ -195,7 +218,7 @@ public class RealAndroidBuilder {
                 emitLog(listener, "  -> AAPT2 Executable successfully initialized.");
                 return aapt2File;
             } else {
-                emitLog(listener, "  -> [ERROR] Target binary is still not executable.");
+                emitLog(listener, "  -> [ERROR] Executable permission verification failed.");
             }
         } catch (Exception e) {
             emitLog(listener, "  -> Executable Exception: " + e.getMessage());
@@ -203,7 +226,23 @@ public class RealAndroidBuilder {
         return null;
     }
 
-    // 🟢 အဓိကပြင်ဆင်ချက်- Resource Error များကို အသေးစိတ် ဖမ်းယူပြသမည့် စနစ်
+    // Binary ဖိုင် တစ်ကယ် အလုပ်လုပ်/မလုပ် စစ်ဆေးပေးမည့် မက်သတ်
+    private boolean testExecutable(File file) {
+        try {
+            if (!file.exists()) return false;
+            file.setReadable(true, false);
+            file.setExecutable(true, false);
+            
+            Process chmod = Runtime.getRuntime().exec(new String[]{"chmod", "755", file.getAbsolutePath()});
+            chmod.waitFor();
+            
+            Process p = Runtime.getRuntime().exec(new String[]{file.getAbsolutePath(), "version"});
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private boolean runAapt2Compile(File aapt2, File resDir, File outputDir, BuildListener listener) {
         try {
             List<File> allResFiles = new ArrayList<>();
@@ -222,13 +261,13 @@ public class RealAndroidBuilder {
                 command.add(resFile.getAbsolutePath());
 
                 ProcessBuilder pb = new ProcessBuilder(command);
-                pb.redirectErrorStream(true); // Error messages များကိုပါ တစ်ပါတည်း ဖတ်ရှုရန်
+                pb.redirectErrorStream(true);
                 Process p = pb.start();
 
                 BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream(), "UTF-8"));
                 String line;
                 while ((line = br.readLine()) != null) {
-                    emitLog(listener, "[AAPT2 Output] " + line); // တကယ့် XML/Resource အမှားကို တန်းပြပါမည်
+                    emitLog(listener, "[AAPT2 Output] " + line);
                 }
                 
                 int exitCode = p.waitFor();
