@@ -4,6 +4,7 @@ import android.content.Context;
 import com.google.gson.Gson;
 import com.nextide.model.Project;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,10 +12,11 @@ public class FileUtils {
     private static final String PROJECTS_FILE = "projects.json";
     private static final Gson GSON = new Gson();
 
-    // ── Read / Write files ─────────────────────────────────────────────
+    // ── Read / Write files (AIDE & Standard IDE Specification) ─────────────────────────────
     public static String readFile(File file) throws IOException {
         StringBuilder sb = new StringBuilder();
-        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+        // 🟢 ပြင်ဆင်ချက်: မြန်မာစာနှင့် အခြားဘာသာစကားများ Encoding မပျက်စေရန် UTF-8 ဖြင့် တိကျစွာဖတ်ပါသည်
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
             String line;
             while ((line = br.readLine()) != null) {
                 sb.append(line).append('\n');
@@ -28,13 +30,13 @@ public class FileUtils {
     }
 
     public static void writeFile(File file, String content) throws IOException {
-        // ဖိုင်မဆောက်ခင် အပေါ်က Folder တည်ဆောက်ပုံကို သေချာအောင် စစ်ဆေးခြင်း
         File parent = file.getParentFile();
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
         }
-        try (FileWriter fw = new FileWriter(file)) {
-            fw.write(content);
+        // 🟢 ပြင်ဆင်ချက်: ကုဒ်နှင့် Comment များထဲမှ စာသားများ မပျက်စီးစေရန် UTF-8 ဖြင့် စနစ်တကျ ရေးသားပါသည်
+        try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
+            bw.write(content);
         }
     }
 
@@ -88,7 +90,6 @@ public class FileUtils {
     public static void scaffoldProject(File projectDir, String language) throws IOException {
         if (!projectDir.exists()) projectDir.mkdirs();
         
-        // စာလုံးကြီးသေး အမှားမခံဘဲ Safe ဖြစ်အောင် သတ်မှတ်ခြင်း
         String lang = (language != null) ? language.toLowerCase().trim() : "text";
         switch (lang) {
             case "java":   scaffoldJava(projectDir);   break;
@@ -103,7 +104,6 @@ public class FileUtils {
     private static void scaffoldJava(File dir) throws IOException {
         String projectName = dir.getName();
         
-        // 1. တိကျသော Directory ပတ်လမ်းကြောင်းများ အဆင့်ဆင့်ဆောက်ခြင်း
         File srcDir = new File(dir, "src/main/java/com/nextide/app");
         File layoutDir = new File(dir, "src/main/res/layout");
         File valuesDir = new File(dir, "src/main/res/values");
@@ -112,12 +112,13 @@ public class FileUtils {
         layoutDir.mkdirs();
         valuesDir.mkdirs();
 
-        // 2. MainActivity.java
+        // 🟢 ပြင်ဆင်ချက်: R file အား တန်းသိစေရန် import ကွန်မန့်အား ဖြည့်စွက်ပေးထားပြီး အလိုအလျောက် Build ဖြစ်စေပါသည်
         writeFile(new File(srcDir, "MainActivity.java"),
             "package com.nextide.app;\n\n" +
             "import android.os.Bundle;\n" +
             "import android.app.Activity;\n" +
-            "import android.widget.TextView;\n\n" +
+            "import android.widget.TextView;\n" +
+            "import com.nextide.app.R;\n\n" + // 👈 ကွက်တိထည့်သွင်းပေးလိုက်ပါပြီ
             "public class MainActivity extends Activity {\n" +
             "    @Override\n" +
             "    protected void onCreate(Bundle savedInstanceState) {\n" +
@@ -230,7 +231,8 @@ public class FileUtils {
             }
             return total;
         }
-        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+        // 🟢 ပြင်ဆင်ချက်: Line Count တွက်ရာတွင်လည်း Encoding ပျက်ပြီး စာကြောင်းရေလွဲခြင်းမှ ကာကွယ်ရန် ညှိထားပါသည်
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
             int lines = 0;
             while (br.readLine() != null) lines++;
             return lines;
