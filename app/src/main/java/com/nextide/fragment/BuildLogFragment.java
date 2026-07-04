@@ -1,90 +1,103 @@
-package com.nextide.fragment;
+package com.nextide.build;
 
 import android.content.Context;
-import android.os.Bundle;
-import android.text.method.ScrollingMovementMethod;
-import android.view.*;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.core.content.ContextCompat;
-import androidx.fragment.app.Fragment;
-import com.nextide.R;
-import com.nextide.databinding.FragmentBuildLogBinding;
+import android.os.Handler;
+import android.os.Looper;
 import com.nextide.model.BuildResult;
+import com.nextide.model.Project;
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class BuildLogFragment extends Fragment {
-    private FragmentBuildLogBinding binding;
-
-    public static BuildLogFragment newInstance() { return new BuildLogFragment(); }
-
-    @Nullable @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
-                             @Nullable Bundle savedInstanceState) {
-        binding = FragmentBuildLogBinding.inflate(inflater, container, false);
-        return binding.getRoot();
+public class BuildManager {
+    public interface BuildListener {
+        void onLogAppended(String line);
+        void onBuildFinished(BuildResult result);
     }
 
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        binding.tvBuildLog.setMovementMethod(new ScrollingMovementMethod());
-        binding.tvBuildLog.setHorizontallyScrolling(true);
-        binding.btnClear.setOnClickListener(v -> clearLog());
-        updateStatus(null);
-    }
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    public void appendLog(String text) {
-        // Fragment သည် Activity တွင် ရှိမနေပါက သို့မဟုတ် Binding မရှိပါက ကျော်ရန်
-        if (binding == null || !isAdded()) return;
+    // 🟢 MainActivity က ပို့လိုက်တဲ့ Context, Project, Listener (Argument ၃ ခုလုံး) ကို လက်ခံရန် ပြင်ဆင်လိုက်ပါပြီ
+    public BuildResult triggerBuild(Context context, Project project, BuildListener listener) {
+        BuildResult result = new BuildResult();
+        result.setStatus(BuildResult.Status.RUNNING);
         
-        binding.tvBuildLog.append(text);
-        
-        // Auto-scroll to bottom (Safe Call)
-        if (binding.tvBuildLog.getLayout() != null) {
-            int scrollAmount = binding.tvBuildLog.getLayout().getLineTop(binding.tvBuildLog.getLineCount()) 
-                    - binding.tvBuildLog.getHeight();
-            if (scrollAmount > 0) {
-                binding.tvBuildLog.scrollTo(0, scrollAmount);
+        long startTime = System.currentTimeMillis();
+
+        executor.submit(() -> {
+            try {
+                String ts = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                emit(listener, "╔══════════════════════════════════════╗\n");
+                emit(listener, "║      Next IDE Build System v1.0      ║\n");
+                emit(listener, "╚══════════════════════════════════════╝\n\n");
+                emit(listener, "[" + ts + "] REAL COMPILATION STARTED\n");
+                emit(listener, "[" + ts + "] Project: " + project.getName() + "\n");
+                emit(listener, "[" + ts + "] Target: Android Application (.apk)\n\n");
+
+                File projectDir = project.getDirectory();
+                
+                // 🟢 MainActivity က ပို့ပေးလိုက်တဲ့ စစ်မှန်သော Context ကို သုံးပြီး Builder ကို အသက်သွင်းခြင်း
+                RealAndroidBuilder builder = new RealAndroidBuilder(context); 
+                
+                builder.buildProject(projectDir, new RealAndroidBuilder.BuildListener() {
+                    @Override
+                    public void onLog(String message) {
+                        emit(listener, message);
+                    }
+
+                    @Override
+                    public void onSuccess(File apkFile) {
+                        String endTs = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                        double dur = (System.currentTimeMillis() - startTime) / 1000.0;
+                        
+                        emit(listener, "\n[" + endTs + "] Output Path: " + apkFile.getAbsolutePath() + "\n");
+                        emit(listener, String.format("[" + endTs + "] BUILD SUCCESSFUL in %.2fs\n", dur));
+                        
+                        result.setStatus(BuildResult.Status.SUCCESS);
+                        result.setEndTime(System.currentTimeMillis());
+                        finish(listener, result);
+                    }
+
+                    @Override
+                    public void onFailed(String error) {
+                        String endTs = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                        emit(listener, "\n[ERROR] " + error + "\n");
+                        emit(listener, "[" + endTs + "] BUILD FAILED\n");
+                        
+                        result.setStatus(BuildResult.Status.FAILED);
+                        result.setEndTime(System.currentTimeMillis());
+                        finish(listener, result);
+                    }
+                });
+
+            } catch (Exception e) {
+                result.setStatus(BuildResult.Status.FAILED);
+                result.setEndTime(System.currentTimeMillis());
+                emit(listener, "[ERROR] Unexpected build manager error: " + e.getMessage() + "\n");
+                finish(listener, result);
             }
-        }
+        });
+
+        return result;
     }
 
-    public void clearLog() {
-        if (binding == null) return;
-        binding.tvBuildLog.setText("");
-        updateStatus(null);
+    private void emit(BuildListener listener, String line) {
+        mainHandler.post(() -> {
+            if (listener != null) {
+                listener.onLogAppended(line);
+            }
+        });
     }
 
-    public void updateStatus(BuildResult result) {
-        // Activity နှင့် ချိတ်ဆက်မထားပါက အရောင်ပြောင်းရန် Context မရှိသဖြင့် ကျော်ရန်
-        if (binding == null || !isAdded()) return;
-        
-        Context context = getContext();
-        if (context == null) return;
-
-        if (result == null) {
-            binding.tvStatus.setText("IDLE");
-            binding.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_idle));
-            return;
-        }
-        
-        switch (result.getStatus()) {
-            case RUNNING:
-                binding.tvStatus.setText("BUILDING…");
-                binding.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_running));
-                break;
-            case SUCCESS:
-                binding.tvStatus.setText("SUCCESS");
-                binding.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_success));
-                break;
-            case FAILED:
-                binding.tvStatus.setText("FAILED");
-                binding.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_failed));
-                break;
-        }
-    }
-
-    @Override public void onDestroyView() {
-        super.onDestroyView();
-        binding = null;
+    private void finish(BuildListener listener, BuildResult result) {
+        mainHandler.post(() -> {
+            if (listener != null) {
+                listener.onBuildFinished(result);
+            }
+        });
     }
 }
