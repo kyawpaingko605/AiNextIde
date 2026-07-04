@@ -102,7 +102,7 @@ public class FileUtils {
     private static void scaffoldJava(File dir) throws IOException {
         String projectName = dir.getName();
         
-        // 🟢 ၁။ Root Levels အောက်တွင် 'app' Module Folder ကို ခံ၍ တည်ဆောက်ခြင်း
+        // ၁။ Root Levels အောက်တွင် 'app' Module Folder ကို ခံ၍ တည်ဆောက်ခြင်း
         File appDir = new File(dir, "app");
         File srcDir = new File(appDir, "src/main/java/com/nextide/app");
         File layoutDir = new File(appDir, "src/main/res/layout");
@@ -112,7 +112,7 @@ public class FileUtils {
         layoutDir.mkdirs();
         valuesDir.mkdirs();
 
-        // 🟢 ၂။ Project Root Level ရှိ ဖိုင်များကို ဆောက်ခြင်း
+        // ၂။ Project Root Level ရှိ ဖိုင်များကို ဆောက်ခြင်း
         // settings.gradle (Root Level)
         writeFile(new File(dir, "settings.gradle"),
             "rootProject.name = '" + projectName + "'\n" +
@@ -130,7 +130,7 @@ public class FileUtils {
             "# " + projectName + "\n\nAn Android Java app project created with Next IDE.\n");
 
 
-        // 🟢 ၃။ 'app' Module Folder အောက်ရှိ တကယ့် ဖိုင်များကို ဆောက်ခြင်း
+        // ၃။ 'app' Module Folder အောက်ရှိ တကယ့် ဖိုင်များကို ဆောက်ခြင်း
         // app/build.gradle
         writeFile(new File(appDir, "build.gradle"),
             "plugins {\n" +
@@ -252,5 +252,55 @@ public class FileUtils {
             while (br.readLine() != null) lines++;
             return lines;
         } catch (IOException e) { return 0; }
+    }
+
+    // ── 🟢 တိုးချဲ့ထားသော စနစ်သစ်- Create New File / Folder (Inside & Outside Architecture) ──
+
+    /**
+     * ရွေးချယ်ထားသော Folder ၏ "အတွင်းဘက်" ၌ File အသစ်ဆောက်ခြင်း
+     */
+    public static boolean createNewFileInside(File parentFolder, String fileName) throws IOException {
+        if (parentFolder == null || !parentFolder.isDirectory() || fileName == null || fileName.trim().isEmpty()) {
+            return false;
+        }
+        File newFile = new File(parentFolder, fileName.trim());
+        writeFile(newFile, ""); // ဖိုင်အလွတ်တစ်ခု တည်ဆောက်ပေးသည်
+        return newFile.exists();
+    }
+
+    /**
+     * ရွေးချယ်ထားသော Folder နှင့် တန်းတူ "အပြင်ဘက် Level" ၌ File အသစ်ဆောက်ခြင်း
+     */
+    public static boolean createNewFileOutside(File currentFolder, String fileName) throws IOException {
+        if (currentFolder == null || fileName == null || fileName.trim().isEmpty()) return false;
+        File parentOfFolder = currentFolder.getParentFile();
+        if (parentOfFolder == null) return false; 
+        
+        File newFile = new File(parentOfFolder, fileName.trim());
+        writeFile(newFile, "");
+        return newFile.exists();
+    }
+
+    /**
+     * ရွေးချယ်ထားသော Folder ၏ "အတွင်းဘက်" ၌ Folder အသစ်ဆောက်ခြင်း
+     */
+    public static boolean createNewFolderInside(File parentFolder, String folderName) {
+        if (parentFolder == null || !parentFolder.isDirectory() || folderName == null || folderName.trim().isEmpty()) {
+            return false;
+        }
+        File newFolder = new File(parentFolder, folderName.trim());
+        return newFolder.mkdirs() || newFolder.exists();
+    }
+
+    /**
+     * ရွေးချယ်ထားသော Folder နှင့် တန်းတူ "အပြင်ဘက် Level" ၌ Folder အသစ်ဆောက်ခြင်း
+     */
+    public static boolean createNewFolderOutside(File currentFolder, String folderName) {
+        if (currentFolder == null || folderName == null || folderName.trim().isEmpty()) return false;
+        File parentOfFolder = currentFolder.getParentFile();
+        if (parentOfFolder == null) return false;
+
+        File newFolder = new File(parentOfFolder, folderName.trim());
+        return newFolder.mkdirs() || newFolder.exists();
     }
 }
