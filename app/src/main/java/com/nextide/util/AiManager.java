@@ -1,6 +1,8 @@
 package com.nextide.util;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import okhttp3.*;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -11,6 +13,7 @@ import java.io.IOException;
 public class AiManager {
 
     private static final String GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+    private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public interface AiFixListener {
         void onFixSuccess(String fixedCode);
@@ -21,11 +24,10 @@ public class AiManager {
         android.content.SharedPreferences prefs = context.getSharedPreferences("ai_settings", Context.MODE_PRIVATE);
         String apiKey = prefs.getString("api_key", ""); 
         
-        // 🟢 လက်ရှိအလုပ်လုပ်နေသော Model အမှန်ဖြစ်ကြောင်း သေချာစေရန် .trim() သုံးထားပါသည်
         String modelName = prefs.getString("model_name", "llama-3.1-8b-instant").trim(); 
 
         if (apiKey.isEmpty()) {
-            listener.onFixFailed("Groq API Key is missing. Please set it in Settings.");
+            emitFailed(listener, "Groq API Key is missing. Please set it in Settings.");
             return;
         }
 
@@ -56,15 +58,14 @@ public class AiManager {
 
         String jsonPayload = root.toString();
         
-        // 🟢 OkHttp Version အားလုံးနှင့် အဆင်ပြေစေရန် MediaType သတ်မှတ်ပုံကို ပြောင်းလဲထားပါသည်
+        // 🟢 400 Error ကင်းဝေးစေရန် MediaType နှင့် Request Headers အား အမှန်ကန်ဆုံး ပြင်ဆင်ခြင်း
         MediaType mediaType = MediaType.parse("application/json; charset=utf-8");
         RequestBody body = RequestBody.create(mediaType, jsonPayload);
 
-        // 🟢 ပြင်ဆင်ချက်: Error 400 လုံးဝမကျစေရန် Content-Type Header အား တိုက်ရိုက်ပြန်လည်ထည့်သွင်းပေးထားပါသည်
         Request request = new Request.Builder()
                 .url(GROQ_API_URL)
-                .addHeader("Authorization", "Bearer " + apiKey.trim())
-                .addHeader("Content-Type", "application/json")
+                .addHeader("Authorization", "Bearer " + apiKey.trim()) // API Key ဘေးက Space များကို ဖြတ်ထုတ်သည်
+                // ❌ 400 Error ဖြစ်စေသည့် duplicate Content-Type header အား ဖယ်ရှားလိုက်ပါသည် (RequestBody က အလိုအလျောက် သယ်ဆောင်သွားမည်)
                 .post(body)
                 .build();
 
@@ -72,7 +73,7 @@ public class AiManager {
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                listener.onFixFailed("Network Error: " + e.getMessage());
+                emitFailed(listener, "Network Error: " + e.getMessage());
             }
 
             @Override
@@ -80,7 +81,7 @@ public class AiManager {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful() || responseBody == null) {
                         String errorBodyStr = responseBody != null ? responseBody.string() : "No error body";
-                        listener.onFixFailed("Groq API Error Code: " + response.code() + "\nDetails: " + errorBodyStr);
+                        emitFailed(listener, "Groq API Error Code: " + response.code() + "\nDetails: " + errorBodyStr);
                         return;
                     }
 
@@ -93,9 +94,9 @@ public class AiManager {
                             .get("content").getAsString();
 
                     String fixedCode = extractCodeFromMarkdown(rawText);
-                    listener.onFixSuccess(fixedCode);
+                    emitSuccess(listener, fixedCode);
                 } catch (Exception e) {
-                    listener.onFixFailed("Parsing Error: " + e.getMessage());
+                    emitFailed(listener, "Parsing Error: " + e.getMessage());
                 }
             }
         });
@@ -112,5 +113,17 @@ public class AiManager {
             if (end > start) return rawText.substring(start, end).trim();
         }
         return rawText.trim();
+    }
+
+    private static void emitSuccess(AiFixListener listener, String fixedCode) {
+        mainHandler.post(() -> {
+            if (listener != null) listener.onFixSuccess(fixedCode);
+        });
+    }
+
+    private static void emitFailed(AiFixListener listener, String reason) {
+        mainHandler.post(() -> {
+            if (listener != null) listener.onFixFailed(reason);
+        });
     }
 }
