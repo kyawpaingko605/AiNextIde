@@ -25,8 +25,16 @@ android {
         }
         debug {
             minifyEnabled false // Debug မှာ ကောင်းကောင်းစမ်းသပ်နိုင်ရန် ပိတ်ထားပါသည်
-            applicationIdSuffix ".debug"
+            // 🟢 ပြင်ဆင်ချက်: jniLibs ပျောက်ဆုံးမှု ကာကွယ်ရန် Suffix ကို ခေတ္တ ပိတ်ထားပါသည်
+            // applicationIdSuffix ".debug"
             versionNameSuffix "-debug"
+        }
+    }
+
+    // 🟢 ပြင်ဆင်ချက်: Native AAPT2 (.so) ဖိုင်များကို မချုံ့ဘဲ တိုက်ရိုက် သုံးနိုင်ရန် ထည့်သွင်းခြင်း
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 
