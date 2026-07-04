@@ -297,7 +297,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void switchToTab(int position) {
-        if (binding == null || position < 0 || position >= editorTabs.size()) return;
+        if (binding == null) return;
+        if (position < 0 || position >= editorTabs.size()) return;
         EditorFragment fragment = editorTabs.get(position);
         getSupportFragmentManager().beginTransaction()
                 .replace(R.id.container_editor, fragment)
@@ -326,8 +327,8 @@ public class MainActivity extends AppCompatActivity {
         setBuildLogVisible(true);
         binding.btnBuild.setEnabled(false);
 
-        // 🟢 ပြင်ဆင်ချက်: BuildManager ဆီသို့ MainActivity.this context ကို ပေါင်းစပ်ထည့်သွင်းပေးလိုက်ပါပြီ
-        lastBuildResult = buildManager.triggerBuild(MainActivity.this, activeProject, new BuildManager.BuildListener() {
+        // 🟢 ပြင်ဆင်ချက်: BuildManager ရဲ့ Parameter ဖွဲ့စည်းပုံအသစ်အတိုင်း အတိအကျ ပြန်ညှိပေးထားပါတယ်
+        lastBuildResult = buildManager.triggerBuild(activeProject, new BuildManager.BuildListener() {
             @Override
             public void onLogAppended(String line) {
                 runOnUiThread(() -> {
