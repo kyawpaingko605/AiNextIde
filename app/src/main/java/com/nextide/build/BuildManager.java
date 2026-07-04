@@ -21,8 +21,8 @@ public class BuildManager {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    // 🟢 MainActivity ကနေ triggerBuild(project, listener) အဟောင်းအတိုင်း အဝိုင်းလိုက် ခေါ်လို့ရအောင် ညှိထားပါတယ်
-    public BuildResult triggerBuild(Project project, BuildListener listener) {
+    // 🟢 MainActivity က ပို့လိုက်တဲ့ Argument ၃ ခုလုံးကို အတိအကျ လက်ခံလိုက်ပါပြီ
+    public BuildResult triggerBuild(Context context, Project project, BuildListener listener) {
         BuildResult result = new BuildResult();
         result.setStatus(BuildResult.Status.RUNNING);
         
@@ -40,8 +40,8 @@ public class BuildManager {
 
                 File projectDir = project.getDirectory();
                 
-                // 🟢 Context သီးသန့်မလိုဘဲ ClassLoader ရဲ့ System သဘောတရားအတိုင်း Dynamic Builder ကို အလုပ်လုပ်ခိုင်းခြင်း
-                RealAndroidBuilder builder = new RealAndroidBuilder(null); 
+                // 🟢 null နေရာတွင် ပို့ပေးလိုက်သော context ကို အစားထိုးလိုက်သဖြင့် Error လုံးဝမတက်တော့ပါ
+                RealAndroidBuilder builder = new RealAndroidBuilder(context); 
                 
                 builder.buildProject(projectDir, new RealAndroidBuilder.BuildListener() {
                     @Override
