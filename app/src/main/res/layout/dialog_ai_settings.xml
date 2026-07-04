@@ -33,7 +33,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Enter API Key"
+        android:text="Enter Groq API Key"
         android:textColor="@color/text_secondary"
         android:textSize="14sp"
         android:layout_marginBottom="4dp"/>
@@ -42,7 +42,7 @@
         android:id="@+id/et_api_key"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="sk-..."
+        android:hint="gsk_..."
         android:textColor="@color/text_primary"
         android:textColorHint="@color/text_muted"
         android:inputType="textPassword"
