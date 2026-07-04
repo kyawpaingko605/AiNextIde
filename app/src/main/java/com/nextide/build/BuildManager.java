@@ -21,12 +21,11 @@ public class BuildManager {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    // 🟢 MainActivity ကနေ triggerBuild(project, listener) ပုံစံဟောင်းအတိုင်း ခေါ်လို့ရအောင် Context မတောင်းတော့ဘဲ ပြန်ပြင်ထားပါတယ်
+    // 🟢 MainActivity ကနေ triggerBuild(project, listener) အဟောင်းအတိုင်း အဝိုင်းလိုက် ခေါ်လို့ရအောင် ညှိထားပါတယ်
     public BuildResult triggerBuild(Project project, BuildListener listener) {
         BuildResult result = new BuildResult();
         result.setStatus(BuildResult.Status.RUNNING);
         
-        // 🟢 Error ပြင်ဆင်ချက်: setStartTime နေရာမှာ သင့်ရဲ့ BuildResult ထဲက startTime field ကို တိုက်ရိုက်ထည့်သွင်းခြင်း
         long startTime = System.currentTimeMillis();
 
         executor.submit(() -> {
@@ -39,18 +38,11 @@ public class BuildManager {
                 emit(listener, "[" + ts + "] Project: " + project.getName() + "\n");
                 emit(listener, "[" + ts + "] Target: Android Application (.apk)\n\n");
 
-                // 🟢 Context ကို project.getDirectory() ရှိရာနေရာ သို့မဟုတ် Application Context ကနေ အော်တိုယူခြင်း
-                // (မှတ်ချက် - RealAndroidBuilder ကို project တည်နေရာသိရုံဖြင့် Dynamic သုံးနိုင်အောင် ပြင်ဆင်ရန်)
-                // ဤနေရာတွင် Real ဝင်လုပ်မည့် Builder ကို ခေါ်ပါမည်
                 File projectDir = project.getDirectory();
                 
-                // စမ်းသပ်မှုနှင့် တကယ့် Log ထုတ်ပေးမည့် အပိုင်း
-                RealAndroidBuilder builder = new RealAndroidBuilder(projectDir.toURI().toURL().getContent() instanceof Context ? (Context)projectDir : null); 
+                // 🟢 Context သီးသန့်မလိုဘဲ ClassLoader ရဲ့ System သဘောတရားအတိုင်း Dynamic Builder ကို အလုပ်လုပ်ခိုင်းခြင်း
+                RealAndroidBuilder builder = new RealAndroidBuilder(null); 
                 
-                // သင့်ရဲ့ ရှိပြီးသား အောက်က စနစ်တွေကို Log Appended ဖြစ်အောင် လှမ်းချိတ်ပေးထားပါတယ်
-                String lang = project.getLanguage().toLowerCase();
-                
-                // Real Builder ရဲ့ Log ကို UI Thread ပေါ် တန်းပြပေးခြင်း
                 builder.buildProject(projectDir, new RealAndroidBuilder.BuildListener() {
                     @Override
                     public void onLog(String message) {
