@@ -36,6 +36,7 @@ public class RealAndroidBuilder {
     public void buildProject(File projectRootDir, BuildListener listener) {
         executor.submit(() -> {
             try {
+                // Build Cache ရှင်းလင်းရေးနှင့် Folder များဆောက်ခြင်း
                 File cacheBin = new File(context.getCodeCacheDir(), "build_bin");
                 if (cacheBin.exists()) deleteFolder(cacheBin);
                 cacheBin.mkdirs();
@@ -46,22 +47,22 @@ public class RealAndroidBuilder {
                 File genDir = new File(cacheBin, "gen");
                 genDir.mkdirs();
 
-                // 🟢 ၁။ Project Structure ထဲတွင် 'app' folder ရှိမရှိ စစ်ဆေးပြီး လမ်းကြောင်းညှိခြင်း
+                // ၁။ Project Directory ပုံစံအား ညှိယူခြင်း
                 File actualProjectDir = projectRootDir;
                 File appFolder = new File(projectRootDir, "app");
                 if (appFolder.exists() && appFolder.isDirectory()) {
                     actualProjectDir = appFolder;
                 }
 
-                // 🟢 ၂။ Native AAPT2 ကို jniLibs မှ တိုက်ရိုက်ချိတ်ဆက်ခြင်း (Permission Denied Fix)
-                emitLog(listener, "[1/5] Preparing AAPT2 packaging tool from jniLibs...");
+                // ၂။ AAPT2 Tool အား Execute ရနိုင်သော Safe Zone သို့ ထုတ်ယူပြင်ဆင်ခြင်း
+                emitLog(listener, "[1/5] Preparing AAPT2 packaging tool...");
                 File aapt2Tool = getAapt2Executable(listener);
                 if (aapt2Tool == null) {
-                    emitFailed(listener, "Error: Unable to load Native AAPT2 Binary from jniLibs.");
+                    emitFailed(listener, "Error: Unable to load or prepare Native AAPT2 Binary.");
                     return;
                 }
 
-                // ၃။ android.jar ဆွဲထုတ်ခြင်း
+                // ၃။ Assets ထဲမှ android.jar အား ထုတ်ယူခြင်း
                 emitLog(listener, "Preparing android.jar framework library...");
                 File androidJarFile = new File(cacheBin, "android.jar");
                 if (!extractAssetFile("bin/android.jar", androidJarFile)) {
@@ -69,7 +70,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // ၄။ AAPT2 Compile & Link လုပ်ခြင်း
+                // ၄။ AAPT2 Resource Compilation စတင်ခြင်း
                 emitLog(listener, "[2/5] Compiling Android resources via AAPT2...");
                 
                 File resDir = new File(actualProjectDir, "src/main/res");
@@ -79,25 +80,25 @@ public class RealAndroidBuilder {
                 compiledResDir.mkdirs();
 
                 if (!resDir.exists() || !manifestFile.exists()) {
-                    emitFailed(listener, "Build Error: Missing 'src/main/res/' or 'src/main/AndroidManifest.xml' at path: " + actualProjectDir.getAbsolutePath());
+                    emitFailed(listener, "Build Error: Missing 'src/main/res/' or 'src/main/AndroidManifest.xml'");
                     return;
                 }
 
-                // အဆင့် (က) - Sub-folders ထဲက xml ဖိုင်များကို တစ်ဖိုင်ချင်းစီ compile လုပ်ခြင်း
+                // အဆင့် (က) - Resource Xml ဖိုင်များကို တစ်ဖိုင်ချင်း Flat ဖိုင်ပြောင်းခြင်း
                 boolean compileResSuccess = runAapt2Compile(aapt2Tool, resDir, compiledResDir, listener);
                 if (!compileResSuccess) {
                     emitFailed(listener, "AAPT2 Resource Compilation (Flat files creation) Failed.");
                     return;
                 }
 
-                // အဆင့် (ခ) - Flat files များကို သုံး၍ AAPT2 Link လုပ်ပြီး R.java ထုတ်ခြင်း
+                // အဆင့် (ခ) - Flat ဖိုင်များကို စုစည်းချိတ်ဆက်ပြီး R.java နှင့် Resource APK ထုတ်ခြင်း
                 boolean aaptSuccess = runAapt2Link(aapt2Tool, androidJarFile, manifestFile, compiledResDir, genDir, resourceAp_, listener);
                 if (!aaptSuccess || !resourceAp_.exists()) {
                     emitFailed(listener, "AAPT2 Resource Linking Failed.");
                     return;
                 }
 
-                // ၅။ Java Source ဖိုင်များနှင့် R.java ကို ရှာဖွေခြင်း
+                // ၅။ Java Source ဖိုင်များနှင့် R.java ဖိုင်များကို ရှာဖွေစုဆောင်းခြင်း
                 emitLog(listener, "[3/5] Scanning project source files...");
                 List<File> javaFiles = new ArrayList<>();
                 collectFiles(actualProjectDir, ".java", javaFiles);
@@ -108,16 +109,15 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // ၆။ ECJ ဖြင့် Java ဖိုင်များကို .class သို့ Compile လုပ်ခြင်း
+                // ၆။ ECJ Compiler ဖြင့် Java ဖိုင်များကို .class သို့ Compile လုပ်ခြင်း
                 emitLog(listener, "[4/5] Compiling with ECJ (Eclipse Compiler)...");
                 boolean compileSuccess = runEcj(javaFiles, classesDir, androidJarFile, listener);
-                
                 if (!compileSuccess) {
                     emitFailed(listener, "ECJ Compilation Failed.");
                     return;
                 }
 
-                // ၇။ D8 ဖြင့် .class များကို classes.dex ပြောင်းလဲခြင်း
+                // ၇။ D8 ဖြင့် .class ဖိုင်များကို classes.dex သို့ ပြောင်းလဲခြင်း
                 emitLog(listener, "[5/5] Transforming .class to Android dex via D8...");
                 List<File> classFiles = new ArrayList<>();
                 collectFiles(classesDir, ".class", classFiles);
@@ -135,7 +135,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // ၈။ အပြီးသတ် APK အဖြစ် Pack လုပ်ခြင်း (Project Root Folder ထဲသို့ ထုတ်ပေးမည်)
+                // ၈။ အပြီးသတ် APK Pack လုပ်ခြင်း
                 File outputApk = new File(projectRootDir, "output_built.apk");
                 packageApk(resourceAp_, dexOutput, outputApk);
 
@@ -153,30 +153,49 @@ public class RealAndroidBuilder {
         });
     }
 
-    // 🟢 ပြင်ဆင်ချက်: jniLibs ထဲမှ libaapt2.so ကို တခြားနေရာသို့ ကူးမနေတော့ဘဲ တိုက်ရိုက်ခေါ်သုံးခြင်း
+    // 🟢 AIDE Style Fix: Permission Denied လုံးဝမဖြစ်စေရန် App Execute Zone သို့ ပြောင်းရွှေ့ပေးခြင်း
     private File getAapt2Executable(BuildListener listener) {
-        String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
-        File libAapt2 = new File(nativeLibDir, "libaapt2.so");
+        try {
+            File binDir = context.getDir("bin", Context.MODE_PRIVATE);
+            File aapt2File = new File(binDir, "aapt2");
 
-        if (libAapt2.exists()) {
-            emitLog(listener, "  -> Native AAPT2 linked directly from jniLibs: " + libAapt2.getAbsolutePath());
-            return libAapt2;
-        } else {
-            emitLog(listener, "  -> Error: libaapt2.so not found in nativeLibraryDir: " + nativeLibDir);
+            if (aapt2File.exists()) {
+                aapt2File.delete();
+            }
+
+            String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
+            File libAapt2 = new File(nativeLibDir, "libaapt2.so");
+
+            boolean copied = false;
+            if (libAapt2.exists()) {
+                copied = copyFile(libAapt2, aapt2File);
+            } else {
+                copied = extractAssetFile("bin/aapt2", aapt2File);
+            }
+
+            if (!copied) return null;
+
+            aapt2File.setReadable(true, false);
+            aapt2File.setExecutable(true, false);
+
+            Process chmodProc = Runtime.getRuntime().exec(new String[]{"chmod", "755", aapt2File.getAbsolutePath()});
+            chmodProc.waitFor();
+
+            if (aapt2File.canExecute()) {
+                return aapt2File;
+            }
+        } catch (Exception e) {
+            emitLog(listener, "  -> Executable Extraction Exception: " + e.getMessage());
         }
         return null;
     }
 
-    // 🟢 ပြင်ဆင်ချက်: XML Resource ဖိုင်များကို တစ်ဖိုင်ချင်းစီ အမှားအယွင်းမရှိ Compile လုပ်ပေးသည့်စနစ်
     private boolean runAapt2Compile(File aapt2, File resDir, File outputDir, BuildListener listener) {
         try {
             List<File> allResFiles = new ArrayList<>();
             getAllResourceFiles(resDir, allResFiles);
 
-            if (allResFiles.isEmpty()) {
-                emitLog(listener, "AAPT2 Compile Warning: No resource files found.");
-                return true; 
-            }
+            if (allResFiles.isEmpty()) return true; 
 
             for (File resFile : allResFiles) {
                 if (resFile.isDirectory() || resFile.getName().startsWith(".")) continue;
@@ -197,18 +216,15 @@ public class RealAndroidBuilder {
                         emitLog(listener, "AAPT2 Compile Error: " + line);
                     }
                 }
-                if (p.waitFor() != 0) {
-                    emitLog(listener, "AAPT2 Compile Failed for file: " + resFile.getName());
-                    return false;
-                }
+                if (p.waitFor() != 0) return false;
             }
             return true;
         } catch (Exception e) {
-            emitLog(listener, "AAPT2 Compile Exception: " + e.getMessage());
             return false;
         }
     }
 
+    // 🟢 AIDE Style Fix: Arguments များကို တိကျမှန်ကန်သော အသုံးအနှုန်းများဖြင့်သာ သတ်မှတ်ခြင်း
     private boolean runAapt2Link(File aapt2, File androidJar, File manifest, File compiledResDir, File genDir, File outputAp_, BuildListener listener) {
         try {
             List<String> command = new ArrayList<>();
@@ -218,12 +234,15 @@ public class RealAndroidBuilder {
             command.add(manifest.getAbsolutePath());
             command.add("-I");
             command.add(androidJar.getAbsolutePath());
-            command.add("--java"); 
+            
+            // AIDE နှင့် standard tool များတွင် သုံးသော argument စစ်စစ်ဖြစ်သည့် --java-output ကို သုံးပါသည်
+            command.add("--java-output"); 
             command.add(genDir.getAbsolutePath());
+            
             command.add("-o");
             command.add(outputAp_.getAbsolutePath());
-            command.add("--v2");
 
+            // Flat ဖိုင်များကို command ထဲသို့ စုထည့်ခြင်း
             File[] flatFiles = compiledResDir.listFiles();
             if (flatFiles != null) {
                 for (File f : flatFiles) {
@@ -239,10 +258,14 @@ public class RealAndroidBuilder {
             
             BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
             String line;
+            boolean hasError = false;
             while ((line = br.readLine()) != null) {
                 emitLog(listener, "AAPT2 Link: " + line);
+                if (line.toLowerCase().contains("error:")) {
+                    hasError = true;
+                }
             }
-            return p.waitFor() == 0;
+            return p.waitFor() == 0 && !hasError;
         } catch (Exception e) {
             emitLog(listener, "AAPT2 Link Exception: " + e.getMessage());
             return false;
