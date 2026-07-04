@@ -7,16 +7,15 @@ import org.eclipse.jdt.internal.compiler.batch.Main;
 import com.android.tools.r8.D8;
 import com.android.tools.r8.D8Command;
 import com.android.tools.r8.OutputMode;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import java.io.*;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 
 public class RealAndroidBuilder {
 
@@ -44,35 +43,64 @@ public class RealAndroidBuilder {
                 File classesDir = new File(cacheBin, "classes");
                 classesDir.mkdirs();
 
-                // အဆင့် ၁ - AAPT2 ကို ရှာဖွေခြင်း သို့မဟုတ် ထုတ်ယူခြင်း
-                emitLog(listener, "[1/4] Preparing AAPT2 packaging tool...");
+                File genDir = new File(cacheBin, "gen");
+                genDir.mkdirs();
+
+                // ၁။ jniLibs ထဲက 32/64-bit Native AAPT2 ကို ဆွဲထုတ်ပြင်ဆင်ခြင်း
+                emitLog(listener, "[1/5] Preparing AAPT2 packaging tool from jniLibs...");
                 File aapt2Tool = getAapt2Executable(listener);
                 if (aapt2Tool == null) {
-                    emitFailed(listener, "Error: Unable to load AAPT2 Binary for this device.");
+                    emitFailed(listener, "Error: Unable to load Native AAPT2 Binary from jniLibs.");
                     return;
                 }
 
-                // အဆင့် ၂ - Java ဖိုင်များကို ရှာဖွေခြင်း
-                emitLog(listener, "[2/4] Scanning project source files...");
+                // 🟢 ၂။ assets/bin/android.jar အား ECJ တွင် Classpath အဖြစ်သုံးရန် Sandbox ထဲသို့ ကြိုတင်ထုတ်ယူခြင်း
+                emitLog(listener, "Preparing android.jar framework library...");
+                File androidJarFile = new File(cacheBin, "android.jar");
+                if (!extractAssetFile("bin/android.jar", androidJarFile)) {
+                    emitFailed(listener, "Error: Missing or damaged assets/bin/android.jar");
+                    return;
+                }
+
+                // ၃။ AAPT2 Link ဖြင့် XML များကို Compile လုပ်ပြီး R.java ထုတ်ခြင်း
+                emitLog(listener, "[2/5] Compiling Android resources via AAPT2...");
+                File resDir = new File(projectDir, "res");
+                File manifestFile = new File(projectDir, "AndroidManifest.xml");
+                File resourceAp_ = new File(cacheBin, "resources.ap_");
+
+                if (!resDir.exists() || !manifestFile.exists()) {
+                    emitFailed(listener, "Build Error: Missing res/ or AndroidManifest.xml");
+                    return;
+                }
+
+                boolean aaptSuccess = runAapt2Link(aapt2Tool, androidJarFile, manifestFile, resDir, genDir, resourceAp_, listener);
+                if (!aaptSuccess || !resourceAp_.exists()) {
+                    emitFailed(listener, "AAPT2 Resource Linking Failed.");
+                    return;
+                }
+
+                // ၄။ Java Source ဖိုင်များနှင့် R.java ကို ရှာဖွေခြင်း
+                emitLog(listener, "[3/5] Scanning project source files...");
                 List<File> javaFiles = new ArrayList<>();
                 collectFiles(projectDir, ".java", javaFiles);
+                collectFiles(genDir, ".java", javaFiles);
 
                 if (javaFiles.isEmpty()) {
-                    emitFailed(listener, "Build Error: No .java files found in " + projectDir.getAbsolutePath());
+                    emitFailed(listener, "Build Error: No .java files found.");
                     return;
                 }
 
-                // အဆင့် ၃ - ECJ ဖြင့် .class သို့ Compile လုပ်ခြင်း
-                emitLog(listener, "[3/4] Compiling with ECJ (Eclipse Compiler)...");
-                boolean compileSuccess = runEcj(javaFiles, classesDir, listener);
+                // ၅။ ECJ ဖြင့် Java ဖိုင်များကို .class သို့ Compile လုပ်ခြင်း (`android.jar` အသုံးပြုမည်)
+                emitLog(listener, "[4/5] Compiling with ECJ (Eclipse Compiler)...");
+                boolean compileSuccess = runEcj(javaFiles, classesDir, androidJarFile, listener);
                 
                 if (!compileSuccess) {
-                    emitFailed(listener, "ECJ Compilation Failed. Please check syntax errors above.");
+                    emitFailed(listener, "ECJ Compilation Failed.");
                     return;
                 }
 
-                // အဆင့် ၄ - D8 ဖြင့် classes.dex သို့ ပြောင်းလဲခြင်း
-                emitLog(listener, "[4/4] Transforming .class to Android dex via D8...");
+                // ၆။ D8 ဖြင့် .class များကို classes.dex ပြောင်းလဲခြင်း
+                emitLog(listener, "[5/5] Transforming .class to Android dex via D8...");
                 List<File> classFiles = new ArrayList<>();
                 collectFiles(classesDir, ".class", classFiles);
 
@@ -84,40 +112,70 @@ public class RealAndroidBuilder {
                 File dexOutput = new File(cacheBin, "classes.dex");
                 runD8(classFiles, cacheBin);
 
-                if (dexOutput.exists()) {
-                    emitLog(listener, "\n[SUCCESS] classes.dex generated successfully inside App Sandbox!");
-                    emitSuccess(listener, dexOutput);
-                } else {
+                if (!dexOutput.exists()) {
                     emitFailed(listener, "D8 dexing completed but classes.dex was not generated.");
+                    return;
+                }
+
+                // ၇။ အပြီးသတ် APK အဖြစ် Pack လုပ်ခြင်း
+                File outputApk = new File(projectDir, "output_built.apk");
+                packageApk(resourceAp_, dexOutput, outputApk);
+
+                if (outputApk.exists()) {
+                    emitLog(listener, "\n[SUCCESS] APK generated successfully inside project directory!");
+                    emitLog(listener, "Path: " + outputApk.getAbsolutePath());
+                    emitSuccess(listener, outputApk);
+                } else {
+                    emitFailed(listener, "Failed to package final APK file.");
                 }
 
             } catch (Exception e) {
-                emitFailed(listener, "Critical Android 11+ Build Failure: " + e.getMessage());
+                emitFailed(listener, "Critical Build Failure: " + e.getMessage());
             }
         });
     }
 
     private File getAapt2Executable(BuildListener listener) {
-        // ၁။ 64-bit သို့မဟုတ် 32-bit ဖုန်းအလိုက် OS က သွင်းပေးထားတဲ့ Native Lib ထဲမှာ အရင်ရှာပါမယ် (Android 11+ ကာကွယ်ရေး)
         String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
         File libAapt2 = new File(nativeLibDir, "libaapt2.so");
 
-        if (libAapt2.exists() && libAapt2.canExecute()) {
-            emitLog(listener, "  -> Using Native Lib AAPT2 (32/64-bit Safe Mode)");
-            return libAapt2;
+        if (libAapt2.exists()) {
+            File cacheBin = new File(context.getCodeCacheDir(), "build_bin");
+            File fallbackFile = new File(cacheBin, "aapt2_jni");
+            if (copyFile(libAapt2, fallbackFile)) {
+                fallbackFile.setExecutable(true, false);
+                emitLog(listener, "  -> Native AAPT2 prepared safely from jniLibs.");
+                return fallbackFile;
+            }
         }
-
-        // ၂။ Fallback - Native Lib အဆင်မပြေပါက Assets ထဲက aapt2 ကို သုံးပါမည်
-        emitLog(listener, "  -> Native AAPT2 not available. Falling back to Assets...");
-        File cacheBin = new File(context.getCodeCacheDir(), "build_bin");
-        File assetsAapt2 = new File(cacheBin, "aapt2");
-
-        if (extractAssetFile("bin/aapt2", assetsAapt2)) {
-            assetsAapt2.setExecutable(true, false);
-            return assetsAapt2;
-        }
-
         return null;
+    }
+
+    // 🟢 ပြင်ဆင်ချက်: link ချိတ်ရာတွင် context sourceDir အစား အသစ်ထုတ်ယူထားသော androidJarFile ကို တိကျစွာသုံးထားပါသည်
+    private boolean runAapt2Link(File aapt2, File androidJar, File manifest, File resDir, File genDir, File outputAp_, BuildListener listener) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    aapt2.getAbsolutePath(),
+                    "link",
+                    "--manifest", manifest.getAbsolutePath(),
+                    "-I", androidJar.getAbsolutePath(), 
+                    "--src", genDir.getAbsolutePath(),
+                    "-o", outputAp_.getAbsolutePath(),
+                    "--v2"
+            );
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            
+            BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String line;
+            while ((line = br.readLine()) != null) {
+                emitLog(listener, "AAPT2: " + line);
+            }
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            emitLog(listener, "AAPT2 Exception: " + e.getMessage());
+            return false;
+        }
     }
 
     private boolean extractAssetFile(String assetPath, File destFile) {
@@ -134,10 +192,27 @@ public class RealAndroidBuilder {
         }
     }
 
-    private boolean runEcj(List<File> javaFiles, File outputDir, BuildListener listener) {
+    private boolean copyFile(File src, File dest) {
+        try (InputStream is = new FileInputStream(src);
+             FileOutputStream os = new FileOutputStream(dest)) {
+            byte[] buffer = new byte[4096];
+            int len;
+            while ((len = is.read(buffer)) != -1) {
+                os.write(buffer, 0, len);
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // 🟢 ပြင်ဆင်ချက်: Classpath နေရာတွင် assets မှ ထုတ်ယူထားသော androidJar ရဲ့ absolute path ကို ထည့်သွင်းပေးလိုက်ပါသည်
+    private boolean runEcj(List<File> javaFiles, File outputDir, File androidJar, BuildListener listener) {
         List<String> args = new ArrayList<>();
         args.add("-1.8");
         args.add("-nowarn");
+        args.add("-cp");
+        args.add(androidJar.getAbsolutePath());
         args.add("-d");
         args.add(outputDir.getAbsolutePath());
 
@@ -167,9 +242,36 @@ public class RealAndroidBuilder {
         D8Command.Builder builder = D8Command.builder()
                 .addProgramFiles(paths)
                 .setOutput(outputDir.toPath(), OutputMode.DexIndexed)
-                .setMinApiLevel(30);
+                .setMinApiLevel(21);
 
         D8.run(builder.build());
+    }
+
+    private void packageApk(File srcApk, File dexFile, File destApk) throws IOException {
+        try (ZipInputStream zis = new ZipInputStream(new FileInputStream(srcApk));
+             ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(destApk))) {
+            
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                zos.putNextEntry(new ZipEntry(entry.getName()));
+                byte[] buffer = new byte[4096];
+                int len;
+                while ((len = zis.read(buffer)) > 0) {
+                    zos.write(buffer, 0, len);
+                }
+                zos.closeEntry();
+            }
+
+            zos.putNextEntry(new ZipEntry("classes.dex"));
+            try (FileInputStream fis = new FileInputStream(dexFile)) {
+                byte[] buffer = new byte[4096];
+                int len;
+                while ((len = fis.read(buffer)) > 0) {
+                    zos.write(buffer, 0, len);
+                }
+            }
+            zos.closeEntry();
+        }
     }
 
     private void collectFiles(File dir, String ext, List<File> out) {
