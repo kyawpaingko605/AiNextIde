@@ -15,7 +15,6 @@ public class FileUtils {
     // ── Read / Write files (AIDE & Standard IDE Specification) ─────────────────────────────
     public static String readFile(File file) throws IOException {
         StringBuilder sb = new StringBuilder();
-        // 🟢 ပြင်ဆင်ချက်: မြန်မာစာနှင့် အခြားဘာသာစကားများ Encoding မပျက်စေရန် UTF-8 ဖြင့် တိကျစွာဖတ်ပါသည်
         try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
             String line;
             while ((line = br.readLine()) != null) {
@@ -34,7 +33,6 @@ public class FileUtils {
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
         }
-        // 🟢 ပြင်ဆင်ချက်: ကုဒ်နှင့် Comment များထဲမှ စာသားများ မပျက်စီးစေရန် UTF-8 ဖြင့် စနစ်တကျ ရေးသားပါသည်
         try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
             bw.write(content);
         }
@@ -100,25 +98,63 @@ public class FileUtils {
         }
     }
 
-    // 📱 Android App (APK Build) အတွက် သီးသန့်တည်ဆောက်ပုံစနစ်သစ်
+    // 📱 Android App (Standard Module Base Build) စနစ်အမှန်အတိုင်း ပြင်ဆင်ထားပါသည်
     private static void scaffoldJava(File dir) throws IOException {
         String projectName = dir.getName();
         
-        File srcDir = new File(dir, "src/main/java/com/nextide/app");
-        File layoutDir = new File(dir, "src/main/res/layout");
-        File valuesDir = new File(dir, "src/main/res/values");
+        // 🟢 ၁။ Root Levels အောက်တွင် 'app' Module Folder ကို ခံ၍ တည်ဆောက်ခြင်း
+        File appDir = new File(dir, "app");
+        File srcDir = new File(appDir, "src/main/java/com/nextide/app");
+        File layoutDir = new File(appDir, "src/main/res/layout");
+        File valuesDir = new File(appDir, "src/main/res/values");
         
         srcDir.mkdirs();
         layoutDir.mkdirs();
         valuesDir.mkdirs();
 
-        // 🟢 ပြင်ဆင်ချက်: R file အား တန်းသိစေရန် import ကွန်မန့်အား ဖြည့်စွက်ပေးထားပြီး အလိုအလျောက် Build ဖြစ်စေပါသည်
+        // 🟢 ၂။ Project Root Level ရှိ ဖိုင်များကို ဆောက်ခြင်း
+        // settings.gradle (Root Level)
+        writeFile(new File(dir, "settings.gradle"),
+            "rootProject.name = '" + projectName + "'\n" +
+            "include ':app'\n");
+
+        // build.gradle (Root Level)
+        writeFile(new File(dir, "build.gradle"),
+            "// Top-level build file where you can add configuration options common to all sub-projects/modules.\n" +
+            "plugins {\n" +
+            "    id 'com.android.application' version '8.2.0' apply false\n" +
+            "}\n");
+
+        // README.md (Root Level)
+        writeFile(new File(dir, "README.md"),
+            "# " + projectName + "\n\nAn Android Java app project created with Next IDE.\n");
+
+
+        // 🟢 ၃။ 'app' Module Folder အောက်ရှိ တကယ့် ဖိုင်များကို ဆောက်ခြင်း
+        // app/build.gradle
+        writeFile(new File(appDir, "build.gradle"),
+            "plugins {\n" +
+            "    id 'com.android.application'\n" +
+            "}\n\n" +
+            "android {\n" +
+            "    namespace 'com.nextide.app'\n" +
+            "    compileSdk 34\n\n" +
+            "    defaultConfig {\n" +
+            "        applicationId \"com.nextide.app\"\n" +
+            "        minSdk 26\n" +
+            "        targetSdk 34\n" +
+            "        versionCode 1\n" +
+            "        versionName \"1.0\"\n" +
+            "    }\n" +
+            "}\n");
+
+        // app/src/main/java/com/nextide/app/MainActivity.java
         writeFile(new File(srcDir, "MainActivity.java"),
             "package com.nextide.app;\n\n" +
             "import android.os.Bundle;\n" +
             "import android.app.Activity;\n" +
             "import android.widget.TextView;\n" +
-            "import com.nextide.app.R;\n\n" + // 👈 ကွက်တိထည့်သွင်းပေးလိုက်ပါပြီ
+            "import com.nextide.app.R;\n\n" +
             "public class MainActivity extends Activity {\n" +
             "    @Override\n" +
             "    protected void onCreate(Bundle savedInstanceState) {\n" +
@@ -127,7 +163,7 @@ public class FileUtils {
             "    }\n" +
             "}\n");
 
-        // 3. activity_main.xml
+        // app/src/main/res/layout/activity_main.xml
         writeFile(new File(layoutDir, "activity_main.xml"),
             "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
             "<LinearLayout xmlns:android=\"http://schemas.android.com/apk/res/android\"\n" +
@@ -143,7 +179,7 @@ public class FileUtils {
             "        android:textStyle=\"bold\"/>\n\n" +
             "</LinearLayout>\n");
 
-        // 4. strings.xml
+        // app/src/main/res/values/strings.xml
         writeFile(new File(valuesDir, "strings.xml"),
             "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
             "<resources>\n" +
@@ -151,8 +187,8 @@ public class FileUtils {
             "    <string name=\"hello_world\">Hello, World from NextIDE!</string>\n" +
             "</resources>\n");
 
-        // 5. AndroidManifest.xml
-        writeFile(new File(dir, "src/main/AndroidManifest.xml"),
+        // app/src/main/AndroidManifest.xml
+        writeFile(new File(appDir, "src/main/AndroidManifest.xml"),
             "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
             "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n" +
             "    package=\"com.nextide.app\">\n\n" +
@@ -168,26 +204,6 @@ public class FileUtils {
             "        </activity>\n" +
             "    </application>\n" +
             "</manifest>\n");
-
-        // 6. build.gradle
-        writeFile(new File(dir, "build.gradle"),
-            "plugins {\n" +
-            "    id 'com.android.application'\n" +
-            "}\n\n" +
-            "android {\n" +
-            "    compileSdk 34\n\n" +
-            "    defaultConfig {\n" +
-            "        applicationId \"com.nextide.app\"\n" +
-            "        minSdk 26\n" +
-            "        targetSdk 34\n" +
-            "        versionCode 1\n" +
-            "        versionName \"1.0\"\n" +
-            "    }\n" +
-            "}\n");
-
-        // 7. README.md
-        writeFile(new File(dir, "README.md"),
-            "# " + projectName + "\n\nAn Android Java app project created with Next IDE.\n");
     }
 
     private static void scaffoldKotlin(File dir) throws IOException {
@@ -231,7 +247,6 @@ public class FileUtils {
             }
             return total;
         }
-        // 🟢 ပြင်ဆင်ချက်: Line Count တွက်ရာတွင်လည်း Encoding ပျက်ပြီး စာကြောင်းရေလွဲခြင်းမှ ကာကွယ်ရန် ညှိထားပါသည်
         try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
             int lines = 0;
             while (br.readLine() != null) lines++;
