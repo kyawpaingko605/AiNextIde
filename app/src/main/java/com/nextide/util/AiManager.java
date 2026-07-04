@@ -24,7 +24,6 @@ public class AiManager {
         android.content.SharedPreferences prefs = context.getSharedPreferences("ai_settings", Context.MODE_PRIVATE);
         String apiKey = prefs.getString("api_key", ""); 
         
-        // 🟢 Groq ၏ ဗားရှင်းအသစ် Model (llama-3.3-70b-versatile) ကို Default အဖြစ် အသုံးပြုထားပါသည်
         String modelName = prefs.getString("model_name", "llama-3.3-70b-versatile").trim(); 
 
         if (apiKey.isEmpty()) {
@@ -59,13 +58,14 @@ public class AiManager {
 
         String jsonPayload = root.toString();
         
-        // 🟢 OkHttp ဗားရှင်းသစ်များတွင် 400 Error ကင်းဝေးစေရန် RequestBody တည်ဆောက်ပုံကို ပြောင်းလဲပြင်ဆင်ခြင်း
-        MediaType mediaType = MediaType.parse("application/json; charset=utf-8");
-        RequestBody body = RequestBody.create(jsonPayload, mediaType);
+        // 🟢 OkHttp ဗားရှင်းအားလုံးနှင့် ကိုက်ညီစေရန် Content-Type ကို အောက်ပါအတိုင်း Null ဖြင့် တည်ဆောက်သည်
+        RequestBody body = RequestBody.create(null, jsonPayload);
 
+        // 🟢 ပြင်ဆင်ချက်- Error 400 လုံးဝမကျစေရန် Content-Type Header အား .header() ဖြင့် အသေအတည်ပြုပေးထားပါသည်
         Request request = new Request.Builder()
                 .url(GROQ_API_URL)
-                .addHeader("Authorization", "Bearer " + apiKey.trim())
+                .header("Authorization", "Bearer " + apiKey.trim())
+                .header("Content-Type", "application/json") // Header ကို ဤနေရာမှ တိုက်ရိုက်ထိန်းချုပ်သည်
                 .post(body)
                 .build();
 
