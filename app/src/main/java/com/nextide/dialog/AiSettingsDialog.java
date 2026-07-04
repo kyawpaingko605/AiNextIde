@@ -26,26 +26,26 @@ public class AiSettingsDialog extends DialogFragment {
         Spinner spinner = view.findViewById(R.id.spinner_ai_model);
         EditText etKey = view.findViewById(R.id.et_api_key);
 
-        // 🟢 UI တွင် ပြသမည့် နာမည်များ
+        // 🟢 UI တွင် User မြင်တွေ့ရမည့် Groq AI မော်ဒယ်အမည်များ
         String[] displayModels = {
-            "Google Gemini 2.0 Flash (Recommended)", 
-            "Google Gemini 1.5 Flash", 
-            "Google Gemini 1.5 Pro"
+            "Llama 3 8B (Ultra Fast - Recommended)", 
+            "Llama 3 70B (High Quality)", 
+            "Mixtral 8x7b (Balanced)"
         };
 
-        // 🟢 AiManager နှင့် API တွင် အသုံးပြုမည့် Model Code များ
+        // 🟢 Groq API Endpoint သို့ ပေးပို့ရမည့် တကယ့် Model ID များ
         String[] actualModels = {
-            "gemini-2.0-flash", 
-            "gemini-1.5-flash", 
-            "gemini-1.5-pro"
+            "llama3-8b-8192", 
+            "llama3-70b-8192", 
+            "mixtral-8x7b-32768"
         };
 
         ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_spinner_item, displayModels);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(adapter);
 
-        // Load saved settings
-        SharedPreferences prefs = requireActivity().getSharedPreferences("ai_prefs", Context.MODE_PRIVATE);
+        // 🟢 ပြင်ဆင်ချက်: AiManager နှင့် အံကိုက်ဖြစ်စေရန် SharedPreferences နာမည်အား "ai_settings" ဟု ပြောင်းလဲပါသည်
+        SharedPreferences prefs = requireActivity().getSharedPreferences("ai_settings", Context.MODE_PRIVATE);
         etKey.setText(prefs.getString("api_key", ""));
         int savedModelPos = prefs.getInt("model_position", 0);
         spinner.setSelection(savedModelPos);
@@ -57,8 +57,8 @@ public class AiSettingsDialog extends DialogFragment {
             prefs.edit()
                 .putString("api_key", etKey.getText().toString().trim())
                 .putInt("model_position", selectedPos)
-                // 🟢 AiManager ကနေ လှမ်းဖတ်ရလွယ်ကူအောင် တကယ့် Model Code (ဥပမာ- gemini-2.0-flash) ကိုပါ သိမ်းဆည်းလိုက်ပါတယ်
-                .putString("selected_model", actualModels[selectedPos])
+                // 🟢 ပြင်ဆင်ချက်: AiManager ထဲက လှမ်းဖတ်မည့် Key Name အား "model_name" ဟု တိကျစွာ ပြောင်းလဲသိမ်းဆည်းပါသည်
+                .putString("model_name", actualModels[selectedPos])
                 .apply();
             dismiss();
         });
