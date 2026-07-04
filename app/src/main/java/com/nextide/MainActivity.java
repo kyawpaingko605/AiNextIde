@@ -327,7 +327,6 @@ public class MainActivity extends AppCompatActivity {
         setBuildLogVisible(true);
         binding.btnBuild.setEnabled(false);
 
-        // 🟢 ပြင်ဆင်ချက်: BuildManager တောင်းဆိုထားသည့်အတိုင်း ပထမဆုံး Parameter တွင် MainActivity.this ကို ပြန်လည်ဖြည့်စွက်ပေးလိုက်ပါပြီ
         lastBuildResult = buildManager.triggerBuild(MainActivity.this, activeProject, new BuildManager.BuildListener() {
             @Override
             public void onLogAppended(String line) {
@@ -350,35 +349,43 @@ public class MainActivity extends AppCompatActivity {
                     if (result != null && result.getStatus() == BuildResult.Status.SUCCESS) {
                         Toast.makeText(MainActivity.this, "Build succeeded!", Toast.LENGTH_SHORT).show();
                     } else {
-                        Toast.makeText(MainActivity.this, "Build failed. AI is analyzing logs...", Toast.LENGTH_SHORT).show();
-                        
-                        File mainFile = new File(activeProject.getDirectory(), "src/main/java/com/nextide/app/MainActivity.java");
-                        String errorLog = (result != null) ? result.toString() : "Unknown build compile error.";
-                        
-                        AiManager.requestAutoFix(MainActivity.this, mainFile, errorLog, new AiManager.AiFixListener() {
-                            @Override
-                            public void onFixSuccess(String fixedCode) {
-                                try {
-                                    FileUtils.writeFile(mainFile, fixedCode);
-                                    
-                                    runOnUiThread(() -> {
-                                        Toast.makeText(MainActivity.this, "AI Auto-Fixed Successfully! Please Rebuild.", Toast.LENGTH_LONG).show();
-                                        if (fileExplorerFragment != null) {
-                                            fileExplorerFragment.loadProject(activeProject);
+                        // 🟢 ပြင်ဆင်ချက်: Build ကျလျှင် အလိုအလျောက်မခေါ်တော့ဘဲ Ask AI Button ပြပေးမည့် စနစ်ပြောင်းလိုက်ပါပြီ
+                        new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("Build Failed")
+                            .setMessage("Would you like Gemini AI to analyze and fix the errors?")
+                            .setPositiveButton("Ask AI", (dialog, which) -> {
+                                Toast.makeText(MainActivity.this, "AI is analyzing logs...", Toast.LENGTH_SHORT).show();
+                                
+                                File mainFile = new File(activeProject.getDirectory(), "src/main/java/com/nextide/app/MainActivity.java");
+                                String errorLog = (result != null) ? result.toString() : "Unknown build compile error.";
+                                
+                                AiManager.requestAutoFix(MainActivity.this, mainFile, errorLog, new AiManager.AiFixListener() {
+                                    @Override
+                                    public void onFixSuccess(String fixedCode) {
+                                        try {
+                                            FileUtils.writeFile(mainFile, fixedCode);
+                                            
+                                            runOnUiThread(() -> {
+                                                Toast.makeText(MainActivity.this, "AI Auto-Fixed Successfully! Please Rebuild.", Toast.LENGTH_LONG).show();
+                                                if (fileExplorerFragment != null) {
+                                                    fileExplorerFragment.loadProject(activeProject);
+                                                }
+                                            });
+                                        } catch (IOException e) {
+                                            e.printStackTrace();
                                         }
-                                    });
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
-                            }
+                                    }
 
-                            @Override
-                            public void onFixFailed(String reason) {
-                                runOnUiThread(() -> {
-                                    Toast.makeText(MainActivity.this, "AI Fix Error: " + reason, Toast.LENGTH_LONG).show();
+                                    @Override
+                                    public void onFixFailed(String reason) {
+                                        runOnUiThread(() -> {
+                                            Toast.makeText(MainActivity.this, "AI Fix Error: " + reason, Toast.LENGTH_LONG).show();
+                                        });
+                                    }
                                 });
-                            }
-                        });
+                            })
+                            .setNegativeButton("Cancel", null)
+                            .show();
                     }
                 });
             }
