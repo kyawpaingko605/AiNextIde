@@ -23,7 +23,7 @@ public class AiManager {
         android.content.SharedPreferences prefs = context.getSharedPreferences("ai_settings", Context.MODE_PRIVATE);
         String apiKey = prefs.getString("api_key", ""); 
         
-        // မြန်ဆန်ပြီး ကုဒ်ရေးသားမှု တိကျတဲ့ llama3-8b-8192 သို့မဟုတ် llama3-70b-8192 မော်ဒယ်ကို သုံးနိုင်ပါတယ်
+        // မြန်ဆန်ပြီး ကုဒ်ရေးသားမှု တိကျတဲ့ llama3-8b-8192 ကို Default ထားပါသည်
         String modelName = prefs.getString("model_name", "llama3-8b-8192"); 
 
         if (apiKey.isEmpty()) {
@@ -39,36 +39,37 @@ public class AiManager {
             currentCode = "// (Could not read file content)";
         }
 
-        // ၃။ Groq AI နားလည်အောင် Prompt ပုံစံ စနစ်တကျ ပြင်ဆင်ခြင်း (Escaping ပြဿနာမရှိစေရန် သန့်စင်ထားပါသည်)
+        // ၃။ Groq AI နားလည်အောင် Prompt ပုံစံ ပြင်ဆင်ခြင်း
         String prompt = "You are an expert Android developer. Fix the compile errors in this Java file.\n\n"
                 + "CURRENT CODE:\n" + currentCode + "\n\n"
                 + "BUILD ERROR LOG:\n" + errorLog + "\n\n"
                 + "Respond ONLY with the complete, fixed Java source code inside a single standard markdown code block. Do not include any explanations.";
 
-        // ၄။ Gson Object စနစ်ဖြင့် စနစ်တကျ JSON ပြောင်းခြင်း (Error 400 လုံးဝမတက်အောင် ကာကွယ်ပေးပါတယ်)
+        // ၄။ Groq API Request JSON Body ကို အမှားအယွင်းမရှိစေရန် တိကျစွာ ဆောက်ခြင်း
         Gson gson = new Gson();
         JsonObject root = new JsonObject();
-        root.addProperty("model", modelName);
+        root.addProperty("model", modelName.trim()); // ရှေ့နောက် Space များ ဖြတ်ပစ်ပါသည်
         
         JsonArray messages = new JsonArray();
         JsonObject messageObj = new JsonObject();
         messageObj.addProperty("role", "user");
-        messageObj.addProperty("content", prompt);
+        messageObj.addProperty("content", prompt); // Gson မှ အလိုအလျောက် String Escape လုပ်ပေးပါမည်
         messages.add(messageObj);
         root.add("messages", messages);
         
-        root.addProperty("temperature", 0.2); // ကုဒ်တိကျမှုရှိစေရန် temperature ကို လျှော့ထားပါတယ်
+        root.addProperty("temperature", 0.2); 
 
-        // 🟢 ပြင်ဆင်ချက်: OkHttp 4.x နှင့် ကိုက်ညီသော RequestBody တည်ဆောက်ပုံသို့ ပြောင်းလဲခြင်း
+        // 🟢 ပြင်ဆင်ချက်: Formatting ကြောင့် JSON ကွဲအက်မှုမရှိစေရန် တိုက်ရိုက် String သုံး၍ RequestBody ဆောက်ခြင်း
+        String jsonPayload = root.toString();
         RequestBody body = RequestBody.create(
-                root.toString(),
+                jsonPayload,
                 MediaType.get("application/json; charset=utf-8")
         );
 
-        // ၅။ Header တွင် Groq Bearer Token ထည့်သွင်းခြင်း
+        // ၅။ Header တွင် Groq Bearer Token စနစ်တကျ ထည့်သွင်းခြင်း
         Request request = new Request.Builder()
                 .url(GROQ_API_URL)
-                .addHeader("Authorization", "Bearer " + apiKey)
+                .addHeader("Authorization", "Bearer " + apiKey.trim())
                 .addHeader("Content-Type", "application/json")
                 .post(body)
                 .build();
@@ -84,7 +85,9 @@ public class AiManager {
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     if (!response.isSuccessful() || responseBody == null) {
-                        listener.onFixFailed("Groq API Error Code: " + response.code() + " - " + response.message());
+                        // Error ဖြစ်ပါက ဆာဗာမှ ပြန်လာသော Message အသေးစိတ်ကိုပါ ထုတ်ပြရန် ပြင်ဆင်ထားပါသည်
+                        String errorBodyStr = responseBody != null ? responseBody.string() : "No error body";
+                        listener.onFixFailed("Groq API Error Code: " + response.code() + "\nDetails: " + errorBodyStr);
                         return;
                     }
 
