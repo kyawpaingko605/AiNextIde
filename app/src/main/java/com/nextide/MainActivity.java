@@ -140,21 +140,17 @@ public class MainActivity extends AppCompatActivity {
     private void setupFab() {
         if (binding == null) return;
         
-        // ၁။ အောက်ခြေ ညာဘက်မှ Floating Action Button (+) အား နှိပ်လျှင်
         binding.fabNewProject.setOnClickListener(v -> showNewProjectDialog());
         
-        // ၂။ ဘယ်ဘက် Navigation Drawer ထဲမှ New Project ခလုတ် (+) ကို နှိပ်လျှင်
         binding.btnNavNewProject.setOnClickListener(v -> {
             binding.drawerLayout.closeDrawer(GravityCompat.START);
             showNewProjectDialog();
         });
 
-        // ၃။ Welcome Screen ရှိ "+ New Project" ခလုတ်ကို နှိပ်လျှင်
         if (binding.btnWelcomeNew != null) {
             binding.btnWelcomeNew.setOnClickListener(v -> showNewProjectDialog());
         }
 
-        // ၄။ Welcome Screen ရှိ "Open Project" ခလုတ်ကို နှိပ်လျှင်
         if (binding.btnWelcomeOpen != null) {
             binding.btnWelcomeOpen.setOnClickListener(v -> {
                 binding.drawerLayout.openDrawer(GravityCompat.START);
@@ -162,7 +158,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // 🎯 XML အဟောင်းထဲက android:onClick ချိတ်ဆက်မှုများကြောင့် Crash မဖြစ်စေရန် ထိန်းသိမ်းပေးထားသော ကုဒ်များ
     public void showNewProjectDialogFromWelcome(View v) {
         showNewProjectDialog();
     }
@@ -331,7 +326,8 @@ public class MainActivity extends AppCompatActivity {
         setBuildLogVisible(true);
         binding.btnBuild.setEnabled(false);
 
-        lastBuildResult = buildManager.triggerBuild(activeProject, new BuildManager.BuildListener() {
+        // 🟢 ပြင်ဆင်ချက်: BuildManager ဆီသို့ MainActivity.this context ကို ပေါင်းစပ်ထည့်သွင်းပေးလိုက်ပါပြီ
+        lastBuildResult = buildManager.triggerBuild(MainActivity.this, activeProject, new BuildManager.BuildListener() {
             @Override
             public void onLogAppended(String line) {
                 runOnUiThread(() -> {
