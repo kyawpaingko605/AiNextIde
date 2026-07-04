@@ -19,12 +19,17 @@ import java.util.zip.ZipOutputStream;
 
 public class RealAndroidBuilder {
 
-    // 🟢 [အရေးကြီးဆုံးထည့်သွင်းချက်] C++ JNI Library ကို App ထဲ ဆွဲတင်ခြင်း
+    // 🟢 Native Library လုဒ်ဆွဲခြင်းအား လုံခြုံစိတ်ချရသော စနစ်သို့ ပြောင်းလဲခြင်း
+    private static boolean isNativeLibraryLoaded = false;
     static {
-        System.loadLibrary("aapt2_jni");
+        try {
+            System.loadLibrary("aapt2_jni");
+            isNativeLibraryLoaded = true;
+        } catch (Throwable t) {
+            isNativeLibraryLoaded = false;
+        }
     }
 
-    // 🟢 [အရေးကြီးဆုံးထည့်သွင်းချက်] C++ ဘက်သို့ လှမ်းခေါ်မည့် Native Method ကြေညာခြင်း
     private static native int runAapt2Native(String[] args);
 
     public interface BuildListener {
@@ -43,7 +48,14 @@ public class RealAndroidBuilder {
 
     public void buildProject(File projectRootDir, BuildListener listener) {
         executor.submit(() -> {
+            // 🟢 [အရေးကြီးဆုံးပြင်ဆင်ချက်] Thread ငြိမ်မသွားစေရန် Exception ရော Error ပါ ဖမ်းနိုင်သော Throwable အား သုံးသည်
             try {
+                // ၀။ Native Library ရှိမရှိ အရင်ဆုံး စစ်ဆေးခြင်း
+                if (!isNativeLibraryLoaded) {
+                    emitFailed(listener, "Critical Error: 'libaapt2_jni.so' failed to load inside App Memory. Check your CMake/NDK build.");
+                    return;
+                }
+
                 File cacheBin = new File(context.getCodeCacheDir(), "build_bin");
                 if (cacheBin.exists()) deleteFolder(cacheBin);
                 cacheBin.mkdirs();
@@ -68,7 +80,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // ၂။ AAPT2 Resource Compilation & Linking စတင်ခြင်း (JNI စနစ်သစ်)
+                // ၂။ AAPT2 Resource Compilation & Linking စတင်ခြင်း
                 emitLog(listener, "[2/5] Compiling Android resources via Native JNI AAPT2...");
                 
                 File resDir = new File(actualProjectDir, "src/main/res");
@@ -82,14 +94,12 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // အဆင့် (က) - XML Resource များကို JNI ဖြင့် Flat ဖိုင်ပြောင်းခြင်း
                 boolean compileResSuccess = runAapt2CompileJni(resDir, compiledResDir, listener);
                 if (!compileResSuccess) {
                     emitFailed(listener, "AAPT2 Native Resource Compilation Failed.");
                     return;
                 }
 
-                // အဆင့် (ခ) - Flat ဖိုင်များကို စုစည်းပြီး R.java နှင့် Resource APK ထုတ်ခြင်း
                 boolean aaptSuccess = runAapt2LinkJni(androidJarFile, manifestFile, compiledResDir, genDir, resourceAp_, listener);
                 if (!aaptSuccess || !resourceAp_.exists()) {
                     emitFailed(listener, "AAPT2 Native Resource Linking Failed.");
@@ -145,13 +155,15 @@ public class RealAndroidBuilder {
                     emitFailed(listener, "Failed to package final APK file.");
                 }
 
-            } catch (Exception e) {
-                emitFailed(listener, "Critical Build Failure: " + e.getMessage());
+            } catch (Throwable t) {
+                // 🟢 မည်သည့် Error/Crash တက်တက် အေးခဲမသွားစေဘဲ လမ်းကြောင်းရှင်းလင်းစွာ ပြသပေးခြင်း
+                StringWriter sw = new StringWriter();
+                t.printStackTrace(new PrintWriter(sw));
+                emitFailed(listener, "Critical Runtime Error:\n" + sw.toString());
             }
         });
     }
 
-    // 🟢 ပြင်ဆင်ချက် - Exec အစား C++ JNI Bridge ထံသို့ Arguments ပို့၍ တိုက်ရိုက် Compile လုပ်ခြင်း
     private boolean runAapt2CompileJni(File resDir, File outputDir, BuildListener listener) {
         try {
             List<File> allResFiles = new ArrayList<>();
@@ -160,29 +172,22 @@ public class RealAndroidBuilder {
             for (File resFile : allResFiles) {
                 if (resFile.isDirectory() || resFile.getName().startsWith(".")) continue;
 
-                // JNI Native အတွက် Arguments Array တည်ဆောက်ခြင်း
                 String[] args = new String[] {
-                        "aapt2",
-                        "compile",
-                        "-o",
-                        outputDir.getAbsolutePath(),
-                        resFile.getAbsolutePath()
+                        "aapt2", "compile", "-o", outputDir.getAbsolutePath(), resFile.getAbsolutePath()
                 };
 
-                // C++ JNI ကို တိုက်ရိုက် မောင်းနှင်ပြီး Exit Code စစ်ဆေးခြင်း
                 int exitCode = runAapt2Native(args);
                 if (exitCode != 0) {
-                    emitLog(listener, "[AAPT2 Native Compile Error] Failed for file: " + resFile.getName());
+                    emitLog(listener, "[AAPT2 JNI Error] Compile failed for: " + resFile.getName());
                     return false;
                 }
             }
             return true;
-        } catch (Exception e) {
+        } catch (Throwable t) {
             return false;
         }
     }
 
-    // 🟢 ပြင်ဆင်ချက် - Exec အစား C++ JNI Bridge ထံသို့ Arguments ပို့၍ တိုက်ရိုက် Link လုပ်ခြင်း
     private boolean runAapt2LinkJni(File androidJar, File manifest, File compiledResDir, File genDir, File outputAp_, BuildListener listener) {
         try {
             List<String> argsList = new ArrayList<>();
@@ -206,10 +211,9 @@ public class RealAndroidBuilder {
                 }
             }
 
-            // String List မှ String Array သို့ ပြောင်းလဲပြီး JNI ထံ ပေးပို့ခြင်း
             int exitCode = runAapt2Native(argsList.toArray(new String[0]));
             return exitCode == 0;
-        } catch (Exception e) {
+        } catch (Throwable t) {
             return false;
         }
     }
