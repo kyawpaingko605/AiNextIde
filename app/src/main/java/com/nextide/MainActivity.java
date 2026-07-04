@@ -327,8 +327,8 @@ public class MainActivity extends AppCompatActivity {
         setBuildLogVisible(true);
         binding.btnBuild.setEnabled(false);
 
-        // 🟢 ပြင်ဆင်ချက်: BuildManager ရဲ့ Parameter ဖွဲ့စည်းပုံအသစ်အတိုင်း အတိအကျ ပြန်ညှိပေးထားပါတယ်
-        lastBuildResult = buildManager.triggerBuild(activeProject, new BuildManager.BuildListener() {
+        // 🟢 ပြင်ဆင်ချက်: BuildManager တောင်းဆိုထားသည့်အတိုင်း ပထမဆုံး Parameter တွင် MainActivity.this ကို ပြန်လည်ဖြည့်စွက်ပေးလိုက်ပါပြီ
+        lastBuildResult = buildManager.triggerBuild(MainActivity.this, activeProject, new BuildManager.BuildListener() {
             @Override
             public void onLogAppended(String line) {
                 runOnUiThread(() -> {
