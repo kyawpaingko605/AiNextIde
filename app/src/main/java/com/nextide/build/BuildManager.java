@@ -21,7 +21,6 @@ public class BuildManager {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    // 🟢 MainActivity က ပို့လိုက်တဲ့ Argument ၃ ခုလုံးကို အတိအကျ လက်ခံလိုက်ပါပြီ
     public BuildResult triggerBuild(Context context, Project project, BuildListener listener) {
         BuildResult result = new BuildResult();
         result.setStatus(BuildResult.Status.RUNNING);
@@ -35,12 +34,20 @@ public class BuildManager {
                 emit(listener, "║      Next IDE Build System v1.0      ║\n");
                 emit(listener, "╚══════════════════════════════════════╝\n\n");
                 emit(listener, "[" + ts + "] REAL COMPILATION STARTED\n");
-                emit(listener, "[" + ts + "] Project: " + project.getName() + "\n");
+                emit(listener, "[" + ts + "] Project: " + (project != null ? project.getName() : "Unknown") + "\n");
                 emit(listener, "[" + ts + "] Target: Android Application (.apk)\n\n");
 
+                // 🟢 ၁။ Project သို့မဟုတ် Project Directory သည် null ဖြစ်နေပါက NullPointerException မဖြစ်အောင် စစ်ဆေးခြင်း
+                if (project == null || project.getDirectory() == null) {
+                    throw new NullPointerException("Project directory mapping is null or uninitialized.");
+                }
+
                 File projectDir = project.getDirectory();
+                if (!projectDir.exists()) {
+                    throw new Exception("Project directory does not exist on disk: " + projectDir.getAbsolutePath());
+                }
                 
-                // 🟢 null နေရာတွင် ပို့ပေးလိုက်သော context ကို အစားထိုးလိုက်သဖြင့် Error လုံးဝမတက်တော့ပါ
+                // 🟢 ၂။ RealAndroidBuilder ကို တည်ဆောက်ခြင်း (Context အစစ် ပေးပို့ထားပါသည်)
                 RealAndroidBuilder builder = new RealAndroidBuilder(context); 
                 
                 builder.buildProject(projectDir, new RealAndroidBuilder.BuildListener() {
@@ -54,7 +61,7 @@ public class BuildManager {
                         String endTs = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
                         double dur = (System.currentTimeMillis() - startTime) / 1000.0;
                         
-                        emit(listener, "\n[" + endTs + "] Output Path: " + apkFile.getAbsolutePath() + "\n");
+                        emit(listener, "\n[" + endTs + "] Output Path: " + (apkFile != null ? apkFile.getAbsolutePath() : "unknown") + "\n");
                         emit(listener, String.format("[" + endTs + "] BUILD SUCCESSFUL in %.2fs\n", dur));
                         
                         result.setStatus(BuildResult.Status.SUCCESS);
@@ -77,6 +84,7 @@ public class BuildManager {
             } catch (Exception e) {
                 result.setStatus(BuildResult.Status.FAILED);
                 result.setEndTime(System.currentTimeMillis());
+                // 🟢 Error အသေးစိတ်ကို Logcat သို့မဟုတ် UI Screen ပေါ်တွင် တိကျစွာ ပြသပေးမည်ဖြစ်သည်
                 emit(listener, "[ERROR] Unexpected build manager error: " + e.getMessage() + "\n");
                 finish(listener, result);
             }
