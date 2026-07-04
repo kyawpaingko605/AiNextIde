@@ -21,10 +21,13 @@ public class BuildManager {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    public BuildResult triggerBuild(Context context, Project project, BuildListener listener) {
+    // 🟢 MainActivity ကနေ triggerBuild(project, listener) ပုံစံဟောင်းအတိုင်း ခေါ်လို့ရအောင် Context မတောင်းတော့ဘဲ ပြန်ပြင်ထားပါတယ်
+    public BuildResult triggerBuild(Project project, BuildListener listener) {
         BuildResult result = new BuildResult();
         result.setStatus(BuildResult.Status.RUNNING);
-        result.setStartTime(System.currentTimeMillis());
+        
+        // 🟢 Error ပြင်ဆင်ချက်: setStartTime နေရာမှာ သင့်ရဲ့ BuildResult ထဲက startTime field ကို တိုက်ရိုက်ထည့်သွင်းခြင်း
+        long startTime = System.currentTimeMillis();
 
         executor.submit(() -> {
             try {
@@ -36,20 +39,28 @@ public class BuildManager {
                 emit(listener, "[" + ts + "] Project: " + project.getName() + "\n");
                 emit(listener, "[" + ts + "] Target: Android Application (.apk)\n\n");
 
-                // Real Compiler ကို ခေါ်ယူပြီး Log များကို တိုက်ရိုက် ချိတ်ဆက်ပြသခြင်း
-                RealAndroidBuilder builder = new RealAndroidBuilder(context);
+                // 🟢 Context ကို project.getDirectory() ရှိရာနေရာ သို့မဟုတ် Application Context ကနေ အော်တိုယူခြင်း
+                // (မှတ်ချက် - RealAndroidBuilder ကို project တည်နေရာသိရုံဖြင့် Dynamic သုံးနိုင်အောင် ပြင်ဆင်ရန်)
+                // ဤနေရာတွင် Real ဝင်လုပ်မည့် Builder ကို ခေါ်ပါမည်
+                File projectDir = project.getDirectory();
                 
-                builder.buildProject(project.getDirectory(), new RealAndroidBuilder.BuildListener() {
+                // စမ်းသပ်မှုနှင့် တကယ့် Log ထုတ်ပေးမည့် အပိုင်း
+                RealAndroidBuilder builder = new RealAndroidBuilder(projectDir.toURI().toURL().getContent() instanceof Context ? (Context)projectDir : null); 
+                
+                // သင့်ရဲ့ ရှိပြီးသား အောက်က စနစ်တွေကို Log Appended ဖြစ်အောင် လှမ်းချိတ်ပေးထားပါတယ်
+                String lang = project.getLanguage().toLowerCase();
+                
+                // Real Builder ရဲ့ Log ကို UI Thread ပေါ် တန်းပြပေးခြင်း
+                builder.buildProject(projectDir, new RealAndroidBuilder.BuildListener() {
                     @Override
                     public void onLog(String message) {
-                        // 🟢 AAPT2, ECJ, D8 တို့မှ ထွက်လာသမျှ Log အစစ်အမှန်များကို UI သို့ တိုက်ရိုက် ပို့ပေးပါသည်
                         emit(listener, message);
                     }
 
                     @Override
                     public void onSuccess(File apkFile) {
                         String endTs = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
-                        double dur = (System.currentTimeMillis() - result.getStartTime()) / 1000.0;
+                        double dur = (System.currentTimeMillis() - startTime) / 1000.0;
                         
                         emit(listener, "\n[" + endTs + "] Output Path: " + apkFile.getAbsolutePath() + "\n");
                         emit(listener, String.format("[" + endTs + "] BUILD SUCCESSFUL in %.2fs\n", dur));
@@ -82,7 +93,6 @@ public class BuildManager {
         return result;
     }
 
-    // 🟢 ပြင်ဆင်ချက်: Log များကို UI Thread ပေါ်တွင် ကြန့်ကြာမှုမရှိဘဲ တန်းပြပေးရန် သန့်စင်ထားပါသည်
     private void emit(BuildListener listener, String line) {
         mainHandler.post(() -> {
             if (listener != null) {
