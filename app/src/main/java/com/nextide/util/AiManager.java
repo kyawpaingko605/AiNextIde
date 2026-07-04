@@ -24,7 +24,8 @@ public class AiManager {
         android.content.SharedPreferences prefs = context.getSharedPreferences("ai_settings", Context.MODE_PRIVATE);
         String apiKey = prefs.getString("api_key", ""); 
         
-        String modelName = prefs.getString("model_name", "llama-3.3-70b-versatile").trim(); 
+        // 🟢 ပြင်ဆင်ချက်- Groq တွင် ပိုမိုတည်ငြိမ်သော Model Name အား အသုံးပြုရန် (သို့မဟုတ် လိုအပ်ပါက settings မှ အခြား model သို့ ပြောင်းပါ)
+        String modelName = prefs.getString("model_name", "llama3-70b-8192").trim(); 
 
         if (apiKey.isEmpty()) {
             emitFailed(listener, "Groq API Key is missing. Please set it in Settings.");
@@ -58,17 +59,15 @@ public class AiManager {
 
         String jsonPayload = root.toString();
         
-        // 🟢 OkHttp 4.12.0 နှင့် အကိုက်ညီဆုံးဖြစ်အောင် MediaType သတ်မှတ်ခြင်း
-        MediaType mediaType = MediaType.parse("application/json; charset=utf-8");
-        
-        // 🟢 400 Error ကင်းဝေးစေရန် OkHttp 4.x ရေးထုံးအမှန် (Content, MediaType) အတိုင်း တည်ဆောက်ခြင်း
+        // 🟢 OkHttp 4.12.0 အတွက် 400 Error လုံးဝမကျစေမည့် အသန့်ရှင်းဆုံး RequestBody တည်ဆောက်ပုံ
+        MediaType mediaType = MediaType.get("application/json; charset=utf-8");
         RequestBody body = RequestBody.create(jsonPayload, mediaType);
 
-        // 🟢 Header ကွန်ဖလစ်မဖြစ်စေရန်နှင့် စိတ်ချရစေရန် .header() ဖြင့်သာ တိုက်ရိုက်ထည့်သွင်းခြင်း
+        // 🟢 Header များကို အတိအကျ သတ်မှတ်ခြင်း
         Request request = new Request.Builder()
                 .url(GROQ_API_URL)
                 .header("Authorization", "Bearer " + apiKey.trim())
-                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Content-Type", "application/json")
                 .post(body)
                 .build();
 
