@@ -46,14 +46,14 @@ public class RealAndroidBuilder {
                 File genDir = new File(cacheBin, "gen");
                 genDir.mkdirs();
 
-                // 🟢 ပြင်ဆင်ချက်: Project structure ထဲတွင် 'app' folder ရှိမရှိ စစ်ဆေးပြီး လမ်းကြောင်းညှိခြင်း
+                // 🟢 ၁။ Project Structure ထဲတွင် 'app' folder ရှိမရှိ စစ်ဆေးပြီး လမ်းကြောင်းညှိခြင်း
                 File actualProjectDir = projectRootDir;
                 File appFolder = new File(projectRootDir, "app");
                 if (appFolder.exists() && appFolder.isDirectory()) {
                     actualProjectDir = appFolder;
                 }
 
-                // ၁။ Native AAPT2 ကို ဆွဲထုတ်ခြင်း
+                // 🟢 ၂။ Native AAPT2 ကို jniLibs မှ တိုက်ရိုက်ချိတ်ဆက်ခြင်း (Permission Denied Fix)
                 emitLog(listener, "[1/5] Preparing AAPT2 packaging tool from jniLibs...");
                 File aapt2Tool = getAapt2Executable(listener);
                 if (aapt2Tool == null) {
@@ -61,7 +61,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // ၂။ android.jar ဆွဲထုတ်ခြင်း
+                // ၃။ android.jar ဆွဲထုတ်ခြင်း
                 emitLog(listener, "Preparing android.jar framework library...");
                 File androidJarFile = new File(cacheBin, "android.jar");
                 if (!extractAssetFile("bin/android.jar", androidJarFile)) {
@@ -69,7 +69,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // ၃။ AAPT2 Compile & Link လုပ်ခြင်း
+                // ၄။ AAPT2 Compile & Link လုပ်ခြင်း
                 emitLog(listener, "[2/5] Compiling Android resources via AAPT2...");
                 
                 File resDir = new File(actualProjectDir, "src/main/res");
@@ -83,7 +83,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // 🟢 အဆင့် (က) - Sub-folders (layout, values) ထဲက xml ဖိုင်များကို တစ်ဖိုင်ချင်းစီ စနစ်တကျ compile လုပ်ခြင်း
+                // အဆင့် (က) - Sub-folders ထဲက xml ဖိုင်များကို တစ်ဖိုင်ချင်းစီ compile လုပ်ခြင်း
                 boolean compileResSuccess = runAapt2Compile(aapt2Tool, resDir, compiledResDir, listener);
                 if (!compileResSuccess) {
                     emitFailed(listener, "AAPT2 Resource Compilation (Flat files creation) Failed.");
@@ -97,7 +97,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // ၄။ Java Source ဖိုင်များနှင့် R.java ကို ရှာဖွေခြင်း
+                // ၅။ Java Source ဖိုင်များနှင့် R.java ကို ရှာဖွေခြင်း
                 emitLog(listener, "[3/5] Scanning project source files...");
                 List<File> javaFiles = new ArrayList<>();
                 collectFiles(actualProjectDir, ".java", javaFiles);
@@ -108,7 +108,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // ၅။ ECJ ဖြင့် Java ဖိုင်များကို .class သို့ Compile လုပ်ခြင်း
+                // ၆။ ECJ ဖြင့် Java ဖိုင်များကို .class သို့ Compile လုပ်ခြင်း
                 emitLog(listener, "[4/5] Compiling with ECJ (Eclipse Compiler)...");
                 boolean compileSuccess = runEcj(javaFiles, classesDir, androidJarFile, listener);
                 
@@ -117,7 +117,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // ၆။ D8 ဖြင့် .class များကို classes.dex ပြောင်းလဲခြင်း
+                // ၇။ D8 ဖြင့် .class များကို classes.dex ပြောင်းလဲခြင်း
                 emitLog(listener, "[5/5] Transforming .class to Android dex via D8...");
                 List<File> classFiles = new ArrayList<>();
                 collectFiles(classesDir, ".class", classFiles);
@@ -135,7 +135,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // ၇။ အပြီးသတ် APK အဖြစ် Pack လုပ်ခြင်း (Project Root Folder ထဲသို့ တိုက်ရိုက်ထုတ်ပေးမည်)
+                // ၈။ အပြီးသတ် APK အဖြစ် Pack လုပ်ခြင်း (Project Root Folder ထဲသို့ ထုတ်ပေးမည်)
                 File outputApk = new File(projectRootDir, "output_built.apk");
                 packageApk(resourceAp_, dexOutput, outputApk);
 
@@ -153,35 +153,21 @@ public class RealAndroidBuilder {
         });
     }
 
+    // 🟢 ပြင်ဆင်ချက်: jniLibs ထဲမှ libaapt2.so ကို တခြားနေရာသို့ ကူးမနေတော့ဘဲ တိုက်ရိုက်ခေါ်သုံးခြင်း
     private File getAapt2Executable(BuildListener listener) {
         String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
         File libAapt2 = new File(nativeLibDir, "libaapt2.so");
 
         if (libAapt2.exists()) {
-            File binDir = new File(context.getFilesDir(), "bin");
-            if (!binDir.exists()) {
-                binDir.mkdirs();
-            }
-            File fallbackFile = new File(binDir, "aapt2");
-            
-            if (!fallbackFile.exists()) {
-                if (!copyFile(libAapt2, fallbackFile)) {
-                    return null;
-                }
-            }
-            
-            boolean executableSet = fallbackFile.setExecutable(true, false);
-            if (executableSet) {
-                emitLog(listener, "  -> Native AAPT2 prepared safely inside app internal storage.");
-                return fallbackFile;
-            } else {
-                emitLog(listener, "  -> Warning: Failed to set executable permission on AAPT2.");
-            }
+            emitLog(listener, "  -> Native AAPT2 linked directly from jniLibs: " + libAapt2.getAbsolutePath());
+            return libAapt2;
+        } else {
+            emitLog(listener, "  -> Error: libaapt2.so not found in nativeLibraryDir: " + nativeLibDir);
         }
         return null;
     }
 
-    // 🟢 ပြင်ဆင်ချက်: Resource sub-folders များထဲမှ XML ဖိုင်အားလုံးကို လိုက်လံရှာဖွေပြီး တစ်ဖိုင်ချင်းစီ စိတ်ချရအောင် Compile လုပ်ပေးသည့်စနစ်
+    // 🟢 ပြင်ဆင်ချက်: XML Resource ဖိုင်များကို တစ်ဖိုင်ချင်းစီ အမှားအယွင်းမရှိ Compile လုပ်ပေးသည့်စနစ်
     private boolean runAapt2Compile(File aapt2, File resDir, File outputDir, BuildListener listener) {
         try {
             List<File> allResFiles = new ArrayList<>();
@@ -370,7 +356,6 @@ public class RealAndroidBuilder {
         }
     }
 
-    // 🟢 ပြင်ဆင်ချက်: Resource ဖိုင်များအားလုံးကို Recursive ပုံစံဖြင့် ရှာဖွေသိမ်းဆည်းပေးမည့် မက်သတ်
     private void getAllResourceFiles(File dir, List<File> fileList) {
         File[] files = dir.listFiles();
         if (files != null) {
