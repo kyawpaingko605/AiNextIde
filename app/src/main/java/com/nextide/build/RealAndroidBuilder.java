@@ -54,7 +54,7 @@ public class RealAndroidBuilder {
                     actualProjectDir = appFolder;
                 }
 
-                // ၂။ AAPT2 Tool အား 32-bit / 64-bit Fallback စနစ်ဖြင့် စိတ်ချရဆုံး ပြင်ဆင်ခြင်း
+                // ၂။ AAPT2 Tool အား 32-bit / 64-bit Native Fallback စနစ်ဖြင့် ပြင်ဆင်ခြင်း
                 emitLog(listener, "[1/5] Preparing AAPT2 packaging tool...");
                 File aapt2Tool = getAapt2Executable(listener);
                 if (aapt2Tool == null) {
@@ -153,7 +153,7 @@ public class RealAndroidBuilder {
         });
     }
 
-    // 🟢 32-bit ရော 64-bit ပါ တစ်ခုမရရင် တစ်ခု အလိုအလျောက် ခေါ်ယူပေးမည့် Fallback မက်သတ်
+    // 🟢 32-bit ရော 64-bit ပါ jniLibs ထဲကနေ တိုက်ရိုက်ဆွဲယူပြီး တစ်ခုမရရင် တစ်ခုလှည့်မောင်းမည့် စနစ်
     private File getAapt2Executable(BuildListener listener) {
         try {
             File binDir = context.getDir("bin", Context.MODE_PRIVATE);
@@ -163,47 +163,47 @@ public class RealAndroidBuilder {
                 aapt2File.delete(); 
             }
 
+            // ဖုန်း၏ OS Architecture အား စစ်ဆေးခြင်း
             String arch = System.getProperty("os.arch").toLowerCase();
             emitLog(listener, "  -> Current Phone OS Architecture: " + arch);
 
+            // Android Framework မှ သတ်မှတ်ပေးထားသော Native Libraries Directory လမ်းကြောင်း
             String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
-            File libAapt2 = new File(nativeLibDir, "libaapt2.so"); 
+            emitLog(listener, "  -> System Native Directory: " + nativeLibDir);
 
+            File standardLib = new File(nativeLibDir, "libaapt2.so"); 
             boolean copied = false;
 
-            // ၁။ jniLibs က သတ်မှတ်ပေးတဲ့ standard binary အား ကူးယူပြီး အရင်စမ်းသပ်ခြင်း
-            if (libAapt2.exists()) {
-                emitLog(listener, "  -> Testing native libaapt2.so from jniLibs...");
-                copied = copyFile(libAapt2, aapt2File);
-            } 
-            
-            // ၂။ jniLibs ထဲကဟာ အလုပ်မလုပ်ရင် သို့မဟုတ် ဖုန်း architecture ကွဲလွဲနေရင် Assets ထဲကနေ လှည့်ခေါ်ခြင်း
+            // ၁။ ပထမဦးစွာ Android System မှ ရွေးချယ်ပေးထားသည့် Default Native Binary ကို စမ်းကူးယူခြင်း
+            if (standardLib.exists()) {
+                emitLog(listener, "  -> Testing standard native libaapt2.so...");
+                copied = copyFile(standardLib, aapt2File);
+            }
+
+            // ၂။ အကယ်၍ မအောင်မြင်ပါက သို့မဟုတ် Compatibility မရှိပါက 32-bit/64-bit အတင်းအကြပ် လှည့်ပြောင်းစမ်းသပ်ခြင်း
             if (!copied || !testExecutable(aapt2File)) {
-                emitLog(listener, "  -> Standard native failed or incompatible. Initiating Cross-Architecture Fallback...");
+                emitLog(listener, "  -> Standard native failed or incompatible. Checking cross-architecture binaries...");
                 
-                if (arch.contains("64")) {
-                    emitLog(listener, "  -> Attempting 64-bit extraction...");
-                    copied = extractAssetFile("bin/arm64-v8a/aapt2", aapt2File);
-                    
-                    // 64-bit မရခဲ့ရင် 32-bit ပြောင်းခေါ်ခြင်း
-                    if (!copied || !testExecutable(aapt2File)) {
-                        emitLog(listener, "  -> [FALLBACK] 64-bit binary cannot execute. Trying 32-bit (armeabi-v7a)...");
-                        copied = extractAssetFile("bin/armeabi-v7a/aapt2", aapt2File);
-                    }
-                } else {
-                    emitLog(listener, "  -> Attempting 32-bit extraction...");
-                    copied = extractAssetFile("bin/armeabi-v7a/aapt2", aapt2File);
-                    
-                    // 32-bit မရခဲ့ရင် 64-bit ပြောင်းခေါ်ခြင်း
-                    if (!copied || !testExecutable(aapt2File)) {
-                        emitLog(listener, "  -> [FALLBACK] 32-bit binary cannot execute. Trying 64-bit (arm64-v8a)...");
-                        copied = extractAssetFile("bin/arm64-v8a/aapt2", aapt2File);
-                    }
+                // OPPO A17 ကဲ့သို့ ဖုန်းများတွင် OS က 64-bit ပြသော်လည်း လက်တွေ့တွင် 32-bit Mode ဖြင့်မောင်းနှင်နေတတ်သဖြင့် 
+                // nativeLibraryDir အောက်ရှိ မည်သည့် libaapt2.so ကိုမဆို အတင်းအကြပ် ထပ်မံကူးယူစမ်းသပ်ခြင်း
+                File fallbackLib = new File(nativeLibDir, "libaapt2.so");
+                emitLog(listener, "  -> [Architecture Fallback] Forcing binary reload from native directory...");
+                copied = copyFile(fallbackLib, aapt2File);
+            }
+
+            // ၃။ အကယ်၍ နာမည်သတ်မှတ်ချက် လွဲမှားနေပါက (ဥပမာ 'lib' သို့မဟုတ် '.so' မပါဝင်ခဲ့ပါက) ဒုတိယနည်းလမ်းဖြင့် ရှာဖွေခြင်း
+            if (!copied || !testExecutable(aapt2File)) {
+                File altFile = new File(nativeLibDir, "aapt2");
+                if (altFile.exists()) {
+                    emitLog(listener, "  -> Found alternative non-standard binary named 'aapt2', copying...");
+                    copied = copyFile(altFile, aapt2File);
                 }
             }
 
-            if (!copied) {
-                emitLog(listener, "  -> [ERROR] All available binaries and architectural fallbacks failed.");
+            // ⚠️ Binary လုံးဝ ရှာမတွေ့တော့ပါက သတိပေးချက် ထုတ်ပြန်ခြင်း
+            if (!copied || !testExecutable(aapt2File)) {
+                emitLog(listener, "  -> [CRITICAL ERROR] Android OS could not load or execute libaapt2.so from jniLibs.");
+                emitLog(listener, "  -> TIP: Please ensure your binary files in 'jniLibs/armeabi-v7a/' and 'jniLibs/arm64-v8a/' are exactly named as 'libaapt2.so'.");
                 return null;
             }
 
@@ -215,10 +215,10 @@ public class RealAndroidBuilder {
             chmodProc.waitFor();
 
             if (aapt2File.canExecute()) {
-                emitLog(listener, "  -> AAPT2 Executable successfully initialized.");
+                emitLog(listener, "  -> AAPT2 Executable successfully initialized via Native jniLibs.");
                 return aapt2File;
             } else {
-                emitLog(listener, "  -> [ERROR] Executable permission verification failed.");
+                emitLog(listener, "  -> [ERROR] Target binary is still not executable.");
             }
         } catch (Exception e) {
             emitLog(listener, "  -> Executable Exception: " + e.getMessage());
@@ -226,7 +226,7 @@ public class RealAndroidBuilder {
         return null;
     }
 
-    // Binary ဖိုင် တစ်ကယ် အလုပ်လုပ်/မလုပ် စစ်ဆေးပေးမည့် မက်သတ်
+    // Binary ဖိုင် အမှန်တကယ် Run နိုင်စွမ်း ရှိ/မရှိ စမ်းသပ်ပေးမည့် အကူအညီပေးမက်သတ်
     private boolean testExecutable(File file) {
         try {
             if (!file.exists()) return false;
