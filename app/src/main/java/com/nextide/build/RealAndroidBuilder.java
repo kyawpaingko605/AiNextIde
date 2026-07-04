@@ -84,7 +84,7 @@ public class RealAndroidBuilder {
                     return;
                 }
 
-                // အဆင့် (က) - XML Resource များကို တစ်ဖိုင်ချင်း Flat ဖိုင်ပြောင်းခြင်း
+                // အဆင့် (က) - XML Resource များကို တစ်ဖိုင်ချင်း Flat ဖိုင်ပြောင်းခြင်း (Detailed Logging)
                 boolean compileResSuccess = runAapt2Compile(aapt2Tool, resDir, compiledResDir, listener);
                 if (!compileResSuccess) {
                     emitFailed(listener, "AAPT2 Resource Compilation (Flat files creation) Failed.");
@@ -153,7 +153,6 @@ public class RealAndroidBuilder {
         });
     }
 
-    // AIDE/IDE Style: jniLibs/arm64-v8a ထဲက libaapt2.so ကို ဆွဲထုတ်ပြီး Execution Run အောင် ပြင်ဆင်ခြင်း
     private File getAapt2Executable(BuildListener listener) {
         try {
             File binDir = context.getDir("bin", Context.MODE_PRIVATE);
@@ -186,7 +185,6 @@ public class RealAndroidBuilder {
                 return null;
             }
 
-            // Linux Permissions အပြည့်အဝပေးခြင်း (chmod 755)
             aapt2File.setReadable(true, false);
             aapt2File.setExecutable(true, false);
 
@@ -205,7 +203,7 @@ public class RealAndroidBuilder {
         return null;
     }
 
-    // AAPT2 Compile System - Output Parameter ကို ရှေ့သို့ပို့ပြီး Sequence ညှိထားသည်
+    // 🟢 အဓိကပြင်ဆင်ချက်- Resource Error များကို အသေးစိတ် ဖမ်းယူပြသမည့် စနစ်
     private boolean runAapt2Compile(File aapt2, File resDir, File outputDir, BuildListener listener) {
         try {
             List<File> allResFiles = new ArrayList<>();
@@ -224,23 +222,28 @@ public class RealAndroidBuilder {
                 command.add(resFile.getAbsolutePath());
 
                 ProcessBuilder pb = new ProcessBuilder(command);
-                pb.redirectErrorStream(true);
+                pb.redirectErrorStream(true); // Error messages များကိုပါ တစ်ပါတည်း ဖတ်ရှုရန်
                 Process p = pb.start();
 
-                BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream(), "UTF-8"));
                 String line;
                 while ((line = br.readLine()) != null) {
-                    emitLog(listener, "AAPT2 Compile: " + line);
+                    emitLog(listener, "[AAPT2 Output] " + line); // တကယ့် XML/Resource အမှားကို တန်းပြပါမည်
                 }
-                if (p.waitFor() != 0) return false;
+                
+                int exitCode = p.waitFor();
+                if (exitCode != 0) {
+                    emitLog(listener, "[ERROR] AAPT2 Compile Failed for file: " + resFile.getName() + " (Exit Code: " + exitCode + ")");
+                    return false;
+                }
             }
             return true;
         } catch (Exception e) {
+            emitLog(listener, "AAPT2 Compile Exception: " + e.getMessage());
             return false;
         }
     }
 
-    // AAPT2 Link System - Argument အမှန်ဖြစ်သော --java-output ကို သုံးထားသည်
     private boolean runAapt2Link(File aapt2, File androidJar, File manifest, File compiledResDir, File genDir, File outputAp_, BuildListener listener) {
         try {
             List<String> command = new ArrayList<>();
@@ -270,7 +273,7 @@ public class RealAndroidBuilder {
             pb.redirectErrorStream(true);
             Process p = pb.start();
             
-            BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream(), "UTF-8"));
             String line;
             boolean hasError = false;
             while ((line = br.readLine()) != null) {
