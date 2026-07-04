@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand -->
+    <color name="primary">#1E88E5</color>
+    <color name="primary_dark">#1565C0</color>
+    <color name="accent">#4EC9B0</color>
+
+    <!-- IDE background palette -->
+    <color name="bg_editor">#1E1E1E</color>
+    <color name="bg_sidebar">#252526</color>
+    <color name="bg_toolbar">#2D2D30</color>
+    <color name="bg_tab">#2D2D30</color>
+    <color name="bg_tab_active">#1E1E1E</color>
+    <color name="bg_build_log">#0E0E0E</color>
+    <color name="bg_card">#2D2D30</color>
+
+    <!-- Text -->
+    <color name="text_primary">#D4D4D4</color>
+    <color name="text_secondary">#808080</color>
+    <color name="text_muted">#555555</color>
+
+    <!-- Status -->
+    <color name="status_idle">#808080</color>
+    <color name="status_running">#F0C040</color>
+    <color name="status_success">#4EC9B0</color>
+    <color name="status_failed">#F44747</color>
+
+    <!-- Language badge colors -->
+    <color name="lang_java">#B07219</color>
+    <color name="lang_kotlin">#7F52FF</color>
+    <color name="lang_python">#3572A5</color>
+    <color name="lang_cpp">#F34B7D</color>
+    <color name="lang_js">#F1E05A</color>
+
+    <!-- Standard -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="divider">#333333</color>
+    <color name="ripple">#33FFFFFF</color>
+</resources>

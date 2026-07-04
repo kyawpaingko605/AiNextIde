@@ -1,0 +1,14 @@
+#!/system/bin/sh
+# keytool wrapper for AIDE Pro
+# Uses apksigner.jar which provides key management for Android signing
+#
+# For keystore generation, AIDE Pro uses the bundled debug.keystore (debug builds)
+# and release.keystore (release builds) — no manual keytool invocation needed.
+#
+# If you need to generate a new keystore manually:
+#   1. Copy debug.keystore for debug builds (alias: androiddebugkey, pass: android)
+#   2. Use release.keystore for release builds (alias: aidepro_release, pass: aidepro123)
+#
+echo "Keystores are pre-bundled in this directory."
+echo "  debug.keystore   — alias: androiddebugkey  password: android"
+echo "  release.keystore — alias: aidepro_release  password: aidepro123"

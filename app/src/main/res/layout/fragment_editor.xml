@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_editor">
+
+    <!-- Editor toolbar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:orientation="horizontal"
+        android:background="@color/bg_tab"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="8dp">
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_save"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:text="Save"
+            android:textColor="@color/accent"
+            android:textSize="12sp"
+            android:enabled="false"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingHorizontal="12dp"/>
+    </LinearLayout>
+
+    <!-- Sora Code Editor -->
+    <io.github.rosemoe.sora.widget.CodeEditor
+        android:id="@+id/code_editor"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:textSize="14sp"/>
+
+</LinearLayout>

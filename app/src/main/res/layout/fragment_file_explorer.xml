@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_sidebar">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- Header -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:text="EXPLORER"
+            android:textColor="@color/text_secondary"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.12"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="12dp"
+            android:background="@color/bg_toolbar"/>
+
+        <!-- Empty state -->
+        <TextView
+            android:id="@+id/tv_no_project"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No project open"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp"
+            android:gravity="center"
+            android:padding="24dp"
+            android:visibility="gone"/>
+
+        <!-- File tree -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_files"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:paddingBottom="64dp"/>
+    </LinearLayout>
+
+    <!-- FAB for new file -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_new_file"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="12dp"
+        android:src="@android:drawable/ic_input_add"
+        app:backgroundTint="@color/bg_card"
+        app:tint="@color/accent"
+        app:fabSize="mini"
+        android:contentDescription="New File"/>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

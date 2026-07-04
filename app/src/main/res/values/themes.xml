@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NextIDE" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:windowBackground">@color/bg_editor</item>
+        <item name="android:statusBarColor">@color/bg_toolbar</item>
+        <item name="android:navigationBarColor">@color/bg_toolbar</item>
+        <item name="actionBarStyle">@style/Widget.NextIDE.ActionBar</item>
+        <item name="toolbarStyle">@style/Widget.NextIDE.Toolbar</item>
+    </style>
+
+    <style name="Widget.NextIDE.ActionBar" parent="Widget.AppCompat.ActionBar.Solid">
+        <item name="background">@color/bg_toolbar</item>
+        <item name="titleTextStyle">@style/NextIDE.ActionBar.Title</item>
+        <item name="subtitleTextStyle">@style/NextIDE.ActionBar.Subtitle</item>
+    </style>
+
+    <style name="Widget.NextIDE.Toolbar" parent="Widget.AppCompat.Toolbar">
+        <item name="android:background">@color/bg_toolbar</item>
+    </style>
+
+    <style name="NextIDE.ActionBar.Title" parent="TextAppearance.AppCompat.Widget.ActionBar.Title">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:fontFamily">monospace</item>
+    </style>
+
+    <style name="NextIDE.ActionBar.Subtitle" parent="TextAppearance.AppCompat.Widget.ActionBar.Subtitle">
+        <item name="android:textColor">@color/accent</item>
+    </style>
+
+    <style name="Widget.NextIDE.Button.Build" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">@color/accent</item>
+        <item name="android:textColor">@color/bg_editor</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Widget.NextIDE.Button.Run" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <item name="strokeColor">@color/status_running</item>
+        <item name="android:textColor">@color/status_running</item>
+    </style>
+
+    <style name="Widget.NextIDE.Card" parent="Widget.MaterialComponents.CardView">
+        <item name="cardBackgroundColor">@color/bg_card</item>
+        <item name="cardElevation">2dp</item>
+        <item name="cardCornerRadius">8dp</item>
+    </style>
+
+    <style name="Widget.NextIDE.Tab" parent="Widget.MaterialComponents.TabLayout">
+        <item name="tabBackground">@color/bg_tab</item>
+        <item name="tabSelectedTextColor">@color/text_primary</item>
+        <item name="tabTextColor">@color/text_secondary</item>
+        <item name="tabIndicatorColor">@color/accent</item>
+        <item name="tabTextAppearance">@style/NextIDE.TabText</item>
+    </style>
+
+    <style name="NextIDE.TabText" parent="TextAppearance.Design.Tab">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textSize">12sp</item>
+        <item name="textAllCaps">false</item>
+    </style>
+</resources>
