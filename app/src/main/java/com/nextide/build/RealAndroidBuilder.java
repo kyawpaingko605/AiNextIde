@@ -54,7 +54,7 @@ public class RealAndroidBuilder {
                     actualProjectDir = appFolder;
                 }
 
-                // ၂။ AAPT2 Tool အား Force Assets Fallback စနစ်ဖြင့် ပြင်ဆင်ခြင်း
+                // ၂။ AAPT2 Tool အား စိတ်ချရဆုံး getFilesDir() နည်းလမ်းဖြင့် ပြင်ဆင်ခြင်း
                 emitLog(listener, "[1/5] Preparing AAPT2 packaging tool...");
                 File aapt2Tool = getAapt2Executable(listener);
                 if (aapt2Tool == null) {
@@ -153,12 +153,14 @@ public class RealAndroidBuilder {
         });
     }
 
-    // 🟢 Native ရော Assets ပါ လှန်လှောပြီး အလုပ်လုပ်မည့် ဗားရှင်းအမှန်ကို ဇွတ်ရှာမောင်းမည့် စနစ်သစ်
+    // 🟢 Storage Policy နှင့်အညီ FilesDir သို့ပြောင်းလဲထုတ်ယူ၍ စမ်းသပ်မောင်းနှင်မည့် စနစ်
     private File getAapt2Executable(BuildListener listener) {
         try {
-            File binDir = context.getDir("bin", Context.MODE_PRIVATE);
+            // Android OS ဗားရှင်းအသစ်များတွင် exec() လုပ်ရန် getFilesDir() သည် အလုံခြုံဆုံးဖြစ်သည်
+            File binDir = new File(context.getFilesDir(), "bin");
+            if (!binDir.exists()) binDir.mkdirs();
+            
             File aapt2File = new File(binDir, "aapt2");
-
             if (aapt2File.exists()) {
                 aapt2File.delete(); 
             }
@@ -168,36 +170,50 @@ public class RealAndroidBuilder {
             File libAapt2 = new File(nativeLibDir, "libaapt2.so"); 
 
             emitLog(listener, "  -> Current Phone OS Architecture: " + arch);
-            emitLog(listener, "  -> System Native Directory: " + nativeLibDir);
+            emitLog(listener, "  -> Secure Executable Directory: " + binDir.getAbsolutePath());
 
-            // ၁။ jniLibs ထဲက ပေးထားတဲ့ standard native ဖိုင်ကို အရင်စမ်းသပ်ခြင်း
+            // အဆင့် ၁။ jniLibs က ပေးထားတဲ့ native ဖိုင်ကို အရင်ဆုံး စမ်းသပ်ခြင်း
             if (libAapt2.exists()) {
                 emitLog(listener, "  -> Testing native libaapt2.so from jniLibs...");
                 if (copyFile(libAapt2, aapt2File) && testExecutable(aapt2File)) {
-                    emitLog(listener, "  -> [SUCCESS] Native jniLibs AAPT2 is working perfectly.");
+                    emitLog(listener, "  -> Success! Native jniLibs AAPT2 is working perfectly.");
                     return aapt2File;
                 }
-                emitLog(listener, "  -> [WARNING] Native libaapt2.so failed execution test. Bypassing native directory...");
             }
 
-            // ၂။ Native ဖိုင် အလုပ်မလုပ်ပါက Assets ထဲမှ Force ပြီး တစ်ဆင့်ချင်း လှန်လှောထုတ်ယူခြင်း
+            // အဆင့် ၂။ Native ဖိုင် အလုပ်မလုပ်ပါက Assets ထဲမှ တိုက်ရိုက်ထုတ်ယူခြင်း
+            emitLog(listener, "  -> [WARNING] Native libaapt2.so failed execution test. Bypassing native directory...");
             emitLog(listener, "  -> Initiating Ultimate Assets Fallback Chain...");
-            boolean extracted = false;
+            boolean extractionSuccess = false;
 
-            // Oppo A17 ကဲ့သို့ Hybrid OS များအတွက် 32-bit (armeabi-v7a) အား ပထမဦးစွာ ဇွတ်စမ်းထုတ်ခြင်း
-            emitLog(listener, "  -> [Chain 1/2] Extracting 32-bit (armeabi-v7a) from assets...");
-            extracted = extractAssetFile("bin/armeabi-v7a/aapt2", aapt2File);
-            if (extracted && testExecutable(aapt2File)) {
-                emitLog(listener, "  -> [SUCCESS] 32-bit AAPT2 Engine successfully locked and loaded via Assets!");
-                return aapt2File;
-            }
+            if (arch.contains("64")) {
+                emitLog(listener, "  -> [Chain 1/2] Extracting 64-bit (arm64-v8a) from assets...");
+                extractionSuccess = extractAssetFile("bin/arm64-v8a/aapt2", aapt2File);
+                if (extractionSuccess && testExecutable(aapt2File)) {
+                    emitLog(listener, "  -> Success! Activated 64-bit AAPT2 engine.");
+                    return aapt2File;
+                }
 
-            // 32-bit မရမှသာ 64-bit (arm64-v8a) ကို ဒုတိယအဆင့်အနေဖြင့် စမ်းသပ်ခြင်း
-            emitLog(listener, "  -> [Chain 2/2] 32-bit failed. Extracting 64-bit (arm64-v8a) from assets...");
-            extracted = extractAssetFile("bin/arm64-v8a/aapt2", aapt2File);
-            if (extracted && testExecutable(aapt2File)) {
-                emitLog(listener, "  -> [SUCCESS] 64-bit AAPT2 Engine successfully locked and loaded via Assets!");
-                return aapt2File;
+                emitLog(listener, "  -> [Chain 2/2] 64-bit failed. Extracting 32-bit (armeabi-v7a) from assets...");
+                extractionSuccess = extractAssetFile("bin/armeabi-v7a/aapt2", aapt2File);
+                if (extractionSuccess && testExecutable(aapt2File)) {
+                    emitLog(listener, "  -> Success! 32-bit engine activated on 64-bit OS Environment.");
+                    return aapt2File;
+                }
+            } else {
+                emitLog(listener, "  -> [Chain 1/2] Extracting 32-bit (armeabi-v7a) from assets...");
+                extractionSuccess = extractAssetFile("bin/armeabi-v7a/aapt2", aapt2File);
+                if (extractionSuccess && testExecutable(aapt2File)) {
+                    emitLog(listener, "  -> Success! Activated 32-bit AAPT2 engine.");
+                    return aapt2File;
+                }
+
+                emitLog(listener, "  -> [Chain 2/2] 32-bit failed. Extracting 64-bit (arm64-v8a) from assets...");
+                extractionSuccess = extractAssetFile("bin/arm64-v8a/aapt2", aapt2File);
+                if (extractionSuccess && testExecutable(aapt2File)) {
+                    emitLog(listener, "  -> Success! Activated 64-bit engine.");
+                    return aapt2File;
+                }
             }
 
             emitLog(listener, "  -> [CRITICAL ERROR] Absolutely all binary extractions and fallbacks failed to execute.");
@@ -207,11 +223,9 @@ public class RealAndroidBuilder {
         return null;
     }
 
-    // Binary ဖိုင် Runtime မှာ တကယ် Run/မrun သေချာပေါက် စစ်ဆေးပေးမည့် စနစ်
     private boolean testExecutable(File file) {
         try {
             if (!file.exists()) return false;
-            
             file.setReadable(true, false);
             file.setExecutable(true, false);
             
@@ -220,13 +234,11 @@ public class RealAndroidBuilder {
             
             Process p = Runtime.getRuntime().exec(new String[]{file.getAbsolutePath(), "version"});
             
-            // Output Stream leak မဖြစ်စေရန်နှင့် Process မပိတ်မိစေရန် အဆုံးထိ ဖတ်ပေးခြင်း
-            BufferedReader in = new BufferedReader(new InputStreamReader(p.getInputStream(), "UTF-8"));
+            BufferedReader in = new BufferedReader(new InputStreamReader(p.getInputStream()));
             while (in.readLine() != null) { /* no-op */ }
-            in.close();
             
             int exitCode = p.waitFor();
-            return (exitCode == 0 || exitCode == 1);
+            return exitCode == 0 || exitCode == 1; 
         } catch (Exception e) {
             return false;
         }
