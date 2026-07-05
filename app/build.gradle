@@ -16,6 +16,26 @@ android {
         
         // 🛠 Method Limit ကျော်ပြီး ဝင်ဝင်ချင်း Crash တာ ကာကွယ်ရန် MultiDex ဖွင့်ခြင်း
         multiDexEnabled true
+
+        // 🟢 [ဖြည့်စွက်ချက်] CPU Architectures ကန့်သတ်ချက်များ သတ်မှတ်ခြင်း
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a'
+        }
+
+        // 🟢 [ဖြည့်စွက်ချက်] C++ flags သတ်မှတ်ခြင်း
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++17 -frtti -fexceptions"
+            }
+        }
+    }
+
+    // 🟢 [ဖြည့်စွက်ချက်] CMake build script လမ်းကြောင်းအား ချိတ်ဆက်ခြင်း
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
     }
 
     buildTypes {
@@ -24,17 +44,21 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            minifyEnabled false // Debug မှာ ကောင်းကောင်းစမ်းသပ်နိုင်ရန် ပိတ်ထားပါသည်
-            // 🟢 ပြင်ဆင်ချက်: jniLibs ပျောက်ဆုံးမှု ကာကွယ်ရန် Suffix ကို ခေတ္တ ပိတ်ထားပါသည်
-            // applicationIdSuffix ".debug"
+            minifyEnabled false 
             versionNameSuffix "-debug"
         }
     }
 
-    // 🟢 ပြင်ဆင်ချက်: Native AAPT2 (.so) ဖိုင်များကို မချုံ့ဘဲ တိုက်ရိုက် သုံးနိုင်ရန် ထည့်သွင်းခြင်း
     packagingOptions {
         jniLibs {
             useLegacyPackaging = true
+        }
+    }
+
+    // 🟢 [ဖြည့်စွက်ချက်] src/main/jniLibs ကို Gradle က သိအောင် လမ်းကြောင်းဖွင့်ပေးခြင်း
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
         }
     }
 
@@ -50,7 +74,6 @@ android {
 }
 
 dependencies {
-    // Java 17/21 Records desugaring ကို အပြည့်အဝ ထောက်ပံ့ပေးသော ဗားရှင်းသို့ မြှင့်ထားပါသည်
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.2'
 
     // AndroidX
@@ -72,14 +95,14 @@ dependencies {
     implementation 'io.github.Rosemoe.sora-editor:language-java:0.23.4'
     implementation 'io.github.Rosemoe.sora-editor:language-textmate:0.23.4'
 
-    // On-device Java Compiling & Dexing အတွက် Tools Dependencies များ
+    // On-device Java Compiling & Dexing
     implementation 'org.eclipse.jdt:ecj:3.35.0'
     implementation 'com.android.tools:r8:8.2.24'
 
     // Gson
     implementation 'com.google.code.gson:gson:2.10.1'
 
-    // 🎯 AI Auto-Fix (AiManager.java) အလုပ်လုပ်ရန်အတွက် လိုအပ်သော OkHttp Library ဖြည့်စွက်ချက်
+    // AI Auto-Fix
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 
     // Testing
