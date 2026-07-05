@@ -19,17 +19,34 @@ import java.util.zip.ZipOutputStream;
 
 public class RealAndroidBuilder {
 
-    // 🟢 [အရေးကြီးဆုံးပြင်ဆင်ချက်] dlopen စနစ်အတွက် Core Engine ကို အရင်တင်ပြီးမှ JNI Bridge ကို လုဒ်ဆွဲခြင်း
     private static boolean isNativeLibraryLoaded = false;
-    static {
+
+    // 🟢 [အရေးကြီးဆုံးပြင်ဆင်ချက်] /data/data/ Package ပျောက်နေလျှင်ပင် လမ်းကြောင်းရှာပြီး အတင်းမောင်းမည့်စနစ်
+    public static void initializeNativeLibraries(Context context) {
+        if (isNativeLibraryLoaded) return;
+        
         try {
-            // ၁။ အဓိက AAPT2 Core Engine Library အား အရင်ဆုံး Memory ပေါ်တင်ရပါမည်
+            // ၁။ ပုံမှန် စနစ်အတိုင်း Memory ပေါ်တင်ရန် ကြိုးစားခြင်း
             System.loadLibrary("aapt2");
-            // ၂။ ၎င်းအား dlopen ဖြင့် လှမ်းခေါ်မည့် JNI Bridge အား နောက်မှ တင်ရပါမည်
             System.loadLibrary("aapt2_jni");
             isNativeLibraryLoaded = true;
         } catch (Throwable t) {
-            isNativeLibraryLoaded = false;
+            try {
+                // ၂။ ပုံမှန် Load မရပါက App ၏ Package Private Native Directory အား တိုက်ရိုက်ရှာဖွေခြင်း
+                String nativeDir = context.getApplicationInfo().nativeLibraryDir;
+                File aapt2File = new File(nativeDir, "libaapt2.so");
+                File jniFile = new File(nativeDir, "libaapt2_jni.so");
+                
+                if (aapt2File.exists() && jniFile.exists()) {
+                    System.load(aapt2File.getAbsolutePath());
+                    System.load(jniFile.getAbsolutePath());
+                    isNativeLibraryLoaded = true;
+                } else {
+                    isNativeLibraryLoaded = false;
+                }
+            } catch (Throwable e) {
+                isNativeLibraryLoaded = false;
+            }
         }
     }
 
@@ -47,6 +64,8 @@ public class RealAndroidBuilder {
 
     public RealAndroidBuilder(Context context) {
         this.context = context.getApplicationContext();
+        // 🟢 Instance ဆောက်လိုက်သည်နှင့် Native Side ကို အဆင်သင့်ဖြစ်အောင် ပြင်ဆင်ခြင်း
+        initializeNativeLibraries(this.context);
     }
 
     public void buildProject(File projectRootDir, BuildListener listener) {
@@ -54,7 +73,7 @@ public class RealAndroidBuilder {
             try {
                 // ၀။ Native Library ရှိမရှိ အရင်ဆုံး စစ်ဆေးခြင်း
                 if (!isNativeLibraryLoaded) {
-                    emitFailed(listener, "Critical Error: 'libaapt2_jni.so' failed to load inside App Memory. Check your CMake/NDK build.");
+                    emitFailed(listener, "Critical Error: 'libaapt2_jni.so' failed to load inside App Memory. Package directory paths might be unextracted.");
                     return;
                 }
 
