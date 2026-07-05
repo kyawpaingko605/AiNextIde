@@ -24,11 +24,11 @@ public class FileUtils {
         return sb.toString();
     }
 
-    public static void writeFile(File file) throws IOException {
-        writeFile(file, "");
-    }
-
+    // 🟢 ပြင်ဆင်ချက်: Default empty content ကိုမရေးတော့ အဲဒီအစား အကွံကိုယ်တိုင် content ထည့်သွင်းရန်
     public static void writeFile(File file, String content) throws IOException {
+        if (content == null) {
+            content = "";
+        }
         File parent = file.getParentFile();
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
@@ -122,7 +122,7 @@ public class FileUtils {
         writeFile(new File(dir, "build.gradle"),
             "// Top-level build file where you can add configuration options common to all sub-projects/modules.\n" +
             "plugins {\n" +
-            "    id 'com.android.application' version '8.2.0' apply false\n" +
+            "    id 'com.android.application' version '8.4.2' apply false\n" +
             "}\n");
 
         // README.md (Root Level)
@@ -145,17 +145,25 @@ public class FileUtils {
             "        targetSdk 34\n" +
             "        versionCode 1\n" +
             "        versionName \"1.0\"\n" +
+            "        multiDexEnabled true\n" +
+            "    }\n\n" +
+            "    compileOptions {\n" +
+            "        sourceCompatibility JavaVersion.VERSION_17\n" +
+            "        targetCompatibility JavaVersion.VERSION_17\n" +
             "    }\n" +
+            "}\n\n" +
+            "dependencies {\n" +
+            "    implementation 'androidx.appcompat:appcompat:1.6.1'\n" +
+            "    implementation 'androidx.core:core:1.12.0'\n" +
             "}\n");
 
         // app/src/main/java/com/nextide/app/MainActivity.java
         writeFile(new File(srcDir, "MainActivity.java"),
             "package com.nextide.app;\n\n" +
             "import android.os.Bundle;\n" +
-            "import android.app.Activity;\n" +
-            "import android.widget.TextView;\n" +
-            "import com.nextide.app.R;\n\n" +
-            "public class MainActivity extends Activity {\n" +
+            "import androidx.appcompat.app.AppCompatActivity;\n" +
+            "import android.widget.TextView;\n\n" +
+            "public class MainActivity extends AppCompatActivity {\n" +
             "    @Override\n" +
             "    protected void onCreate(Bundle savedInstanceState) {\n" +
             "        super.onCreate(savedInstanceState);\n" +
@@ -264,7 +272,7 @@ public class FileUtils {
             return false;
         }
         File newFile = new File(parentFolder, fileName.trim());
-        writeFile(newFile, ""); // ဖိုင်အလွတ်တစ်ခု တည်ဆောက်ပေးသည်
+        writeFile(newFile, "// New file created by Next IDE\n");
         return newFile.exists();
     }
 
@@ -277,7 +285,7 @@ public class FileUtils {
         if (parentOfFolder == null) return false; 
         
         File newFile = new File(parentOfFolder, fileName.trim());
-        writeFile(newFile, "");
+        writeFile(newFile, "// New file created by Next IDE\n");
         return newFile.exists();
     }
 

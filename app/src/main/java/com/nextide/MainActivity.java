@@ -349,21 +349,34 @@ public class MainActivity extends AppCompatActivity {
                     if (result != null && result.getStatus() == BuildResult.Status.SUCCESS) {
                         Toast.makeText(MainActivity.this, "Build succeeded!", Toast.LENGTH_SHORT).show();
                     } else {
-                        // 🟢 ပြင်ဆင်ချက်: Dialog စာသားအား Gemini အစား Groq AI သို့ အံကိုက် ပြောင်းလဲလိုက်ပါသည်
+                        // 🟢 ပြင်ဆင်ချက်: Dialog စာသားအား Groq AI သို့ အံကိုက် ပြောင်းလဲလိုက်
                         new AlertDialog.Builder(MainActivity.this)
                             .setTitle("Build Failed")
                             .setMessage("Would you like Groq AI to analyze and fix the errors?")
                             .setPositiveButton("Ask AI", (dialog, which) -> {
                                 Toast.makeText(MainActivity.this, "AI is analyzing logs...", Toast.LENGTH_SHORT).show();
                                 
-                                File mainFile = new File(activeProject.getDirectory(), "src/main/java/com/nextide/app/MainActivity.java");
-                                String errorLog = (result != null) ? result.toString() : "Unknown build compile error.";
+                                // 🟢 ပြင်ဆင်ချက်: ကျန်ရှိသော Java file များကို ရှာဖွေခြင်း
+                                File projectDir = activeProject.getDirectory();
+                                File mainFile = new File(projectDir, "app/src/main/java/com/nextide/app/MainActivity.java");
                                 
-                                AiManager.requestAutoFix(MainActivity.this, mainFile, errorLog, new AiManager.AiFixListener() {
+                                // အကယ်တစ်မယ်ဒီ ဖိုင်မတွေ့ရှာ၊ အခြားဖိုင်များကို စာရင်းစီစဉ်
+                                if (!mainFile.exists()) {
+                                    File srcDir = new File(projectDir, "app/src/main/java");
+                                    File[] javaFiles = srcDir.listFiles((dir, name) -> name.endsWith(".java"));
+                                    if (javaFiles != null && javaFiles.length > 0) {
+                                        mainFile = javaFiles[0];
+                                    }
+                                }
+                                
+                                String errorLog = (result != null) ? result.toString() : "Unknown build compile error.";
+                                final File fileToFix = mainFile;
+                                
+                                AiManager.requestAutoFix(MainActivity.this, fileToFix, errorLog, new AiManager.AiFixListener() {
                                     @Override
                                     public void onFixSuccess(String fixedCode) {
                                         try {
-                                            FileUtils.writeFile(mainFile, fixedCode);
+                                            FileUtils.writeFile(fileToFix, fixedCode);
                                             
                                             runOnUiThread(() -> {
                                                 Toast.makeText(MainActivity.this, "AI Auto-Fixed Successfully! Please Rebuild.", Toast.LENGTH_LONG).show();
