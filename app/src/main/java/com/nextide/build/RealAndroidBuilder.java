@@ -19,10 +19,13 @@ import java.util.zip.ZipOutputStream;
 
 public class RealAndroidBuilder {
 
-    // 🟢 Native Library လုဒ်ဆွဲခြင်းအား လုံခြုံစိတ်ချရသော စနစ်သို့ ပြောင်းလဲခြင်း
+    // 🟢 [အရေးကြီးဆုံးပြင်ဆင်ချက်] dlopen စနစ်အတွက် Core Engine ကို အရင်တင်ပြီးမှ JNI Bridge ကို လုဒ်ဆွဲခြင်း
     private static boolean isNativeLibraryLoaded = false;
     static {
         try {
+            // ၁။ အဓိက AAPT2 Core Engine Library အား အရင်ဆုံး Memory ပေါ်တင်ရပါမည်
+            System.loadLibrary("aapt2");
+            // ၂။ ၎င်းအား dlopen ဖြင့် လှမ်းခေါ်မည့် JNI Bridge အား နောက်မှ တင်ရပါမည်
             System.loadLibrary("aapt2_jni");
             isNativeLibraryLoaded = true;
         } catch (Throwable t) {
@@ -48,7 +51,6 @@ public class RealAndroidBuilder {
 
     public void buildProject(File projectRootDir, BuildListener listener) {
         executor.submit(() -> {
-            // 🟢 [အရေးကြီးဆုံးပြင်ဆင်ချက်] Thread ငြိမ်မသွားစေရန် Exception ရော Error ပါ ဖမ်းနိုင်သော Throwable အား သုံးသည်
             try {
                 // ၀။ Native Library ရှိမရှိ အရင်ဆုံး စစ်ဆေးခြင်း
                 if (!isNativeLibraryLoaded) {
@@ -156,7 +158,6 @@ public class RealAndroidBuilder {
                 }
 
             } catch (Throwable t) {
-                // 🟢 မည်သည့် Error/Crash တက်တက် အေးခဲမသွားစေဘဲ လမ်းကြောင်းရှင်းလင်းစွာ ပြသပေးခြင်း
                 StringWriter sw = new StringWriter();
                 t.printStackTrace(new PrintWriter(sw));
                 emitFailed(listener, "Critical Runtime Error:\n" + sw.toString());
