@@ -24,7 +24,7 @@ public class AiManager {
         android.content.SharedPreferences prefs = context.getSharedPreferences("ai_settings", Context.MODE_PRIVATE);
         String apiKey = prefs.getString("api_key", ""); 
         
-        // 🟢 ပြင်ဆင်ချက်- Groq တွင် ပိုမိုတည်ငြိမ်သော Model Name အား အသုံးပြုရန် (သို့မဟုတ် လိုအပ်ပါက settings မှ အခြား model သို့ ပြောင်းပါ)
+        // 🟢 ပြင်ဆင်ချက်- Groq တွင် ပိုမိုတည်ငြိမ်သော Model Name အား အသုံးပြုရန်
         String modelName = prefs.getString("model_name", "llama3-70b-8192").trim(); 
 
         if (apiKey.isEmpty()) {
@@ -80,15 +80,41 @@ public class AiManager {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful() || responseBody == null) {
-                        String errorBodyStr = responseBody != null ? responseBody.string() : "No error body";
-                        emitFailed(listener, "Groq API Error Code: " + response.code() + "\nDetails: " + errorBodyStr);
+                // 🟢 ပြင်ဆင်ချက်: try-with-resources သုံးပြီး ResponseBody ကို အသုံးပြုခြင်း
+                try {
+                    if (!response.isSuccessful()) {
+                        String errorMsg = "Groq API Error Code: " + response.code();
+                        ResponseBody errorBody = response.body();
+                        if (errorBody != null) {
+                            try {
+                                errorMsg += "\nDetails: " + errorBody.string();
+                            } catch (Exception e) {
+                                // Ignore
+                            }
+                        }
+                        emitFailed(listener, errorMsg);
                         return;
                     }
 
+                    ResponseBody responseBody = response.body();
+                    if (responseBody == null) {
+                        emitFailed(listener, "Empty response from Groq API");
+                        return;
+                    }
+
+                    // 🟢 ပြင်ဆင်ချက်: ResponseBody ကို တစ်ကြိမ်သာ ဖတ်ခြင်း
                     String resStr = responseBody.string();
+                    
+                    if (resStr == null || resStr.isEmpty()) {
+                        emitFailed(listener, "Empty response body from Groq API");
+                        return;
+                    }
+                    
                     JsonObject resJson = gson.fromJson(resStr, JsonObject.class);
+                    if (resJson == null || !resJson.has("choices")) {
+                        emitFailed(listener, "Invalid JSON response from Groq API");
+                        return;
+                    }
                     
                     String rawText = resJson.getAsJsonArray("choices")
                             .get(0).getAsJsonObject()
@@ -96,6 +122,11 @@ public class AiManager {
                             .get("content").getAsString();
 
                     String fixedCode = extractCodeFromMarkdown(rawText);
+                    if (fixedCode == null || fixedCode.isEmpty()) {
+                        emitFailed(listener, "No valid code extracted from AI response");
+                        return;
+                    }
+                    
                     emitSuccess(listener, fixedCode);
                 } catch (Exception e) {
                     emitFailed(listener, "Parsing Error: " + e.getMessage());
@@ -105,6 +136,10 @@ public class AiManager {
     }
 
     private static String extractCodeFromMarkdown(String rawText) {
+        if (rawText == null || rawText.isEmpty()) {
+            return "";
+        }
+
         if (rawText.contains("```java")) {
             int start = rawText.indexOf("```java") + 7;
             int end = rawText.indexOf("```", start);
