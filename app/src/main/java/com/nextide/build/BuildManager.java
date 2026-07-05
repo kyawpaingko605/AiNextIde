@@ -1,111 +1,77 @@
 package com.nextide.build;
 
 import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
 import com.nextide.model.BuildResult;
 import com.nextide.model.Project;
-import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * BuildManager - Android APK Build ကို စီမံခန့်ခွဲခြင်း
+ * 🟢 RealAndroidBuilder ကို အသုံးပြု၍ On-Device Build ပြုလုပ်တယ်
+ */
 public class BuildManager {
+
+    private ExecutorService executorService = Executors.newSingleThreadExecutor();
+
     public interface BuildListener {
         void onLogAppended(String line);
         void onBuildFinished(BuildResult result);
     }
 
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
-
+    /**
+     * Build process စတင်ခြင်း
+     * @param context Android Context
+     * @param project Build ပြုလုပ်မည့် Project
+     * @param listener Build progress listener
+     * @return BuildResult
+     */
     public BuildResult triggerBuild(Context context, Project project, BuildListener listener) {
         BuildResult result = new BuildResult();
-        result.setStatus(BuildResult.Status.RUNNING);
         
-        long startTime = System.currentTimeMillis();
-
-        executor.submit(() -> {
+        executorService.submit(() -> {
             try {
-                String ts = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
-                emit(listener, "╔══════════════════════════════════════╗\n");
-                emit(listener, "║      Next IDE Build System v1.0      ║\n");
-                emit(listener, "╚══════════════════════════════════════╝\n\n");
-                emit(listener, "[" + ts + "] REAL COMPILATION STARTED\n");
-                emit(listener, "[" + ts + "] Project: " + (project != null ? project.getName() : "Unknown") + "\n");
-                emit(listener, "[" + ts + "] Target: Android Application (.apk)\n\n");
-
-                // 🟢 ၁။ Project သို့မဟုတ် Project Directory သည် null ဖြစ်နေပါက NullPointerException မဖြစ်အောင် စစ်ဆေးခြင်း
-                if (project == null || project.getDirectory() == null) {
-                    throw new NullPointerException("Project directory mapping is null or uninitialized.");
+                if (listener != null) {
+                    listener.onLogAppended("🔨 Build started for project: " + project.getName());
                 }
 
-                File projectDir = project.getDirectory();
-                if (!projectDir.exists()) {
-                    throw new Exception("Project directory does not exist on disk: " + projectDir.getAbsolutePath());
-                }
-                
-                // 🟢 ၂။ RealAndroidBuilder ကို တည်ဆောက်ခြင်း (Context အစစ် ပေးပို့ထားပါသည်)
-                RealAndroidBuilder builder = new RealAndroidBuilder(context); 
-                
-                builder.buildProject(projectDir, new RealAndroidBuilder.BuildListener() {
+                // 🟢 RealAndroidBuilder ကို အသုံးပြုပြီး APK build ပြုလုပ်ခြင်း
+                RealAndroidBuilder builder = new RealAndroidBuilder();
+                builder.build(context, project, new RealAndroidBuilder.BuildCallback() {
                     @Override
-                    public void onLog(String message) {
-                        emit(listener, message);
+                    public void onProgress(String message) {
+                        if (listener != null) {
+                            listener.onLogAppended(message);
+                        }
                     }
 
                     @Override
-                    public void onSuccess(File apkFile) {
-                        String endTs = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
-                        double dur = (System.currentTimeMillis() - startTime) / 1000.0;
-                        
-                        emit(listener, "\n[" + endTs + "] Output Path: " + (apkFile != null ? apkFile.getAbsolutePath() : "unknown") + "\n");
-                        emit(listener, String.format("[" + endTs + "] BUILD SUCCESSFUL in %.2fs\n", dur));
-                        
-                        result.setStatus(BuildResult.Status.SUCCESS);
-                        result.setEndTime(System.currentTimeMillis());
-                        finish(listener, result);
-                    }
-
-                    @Override
-                    public void onFailed(String error) {
-                        String endTs = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
-                        emit(listener, "\n[ERROR] " + error + "\n");
-                        emit(listener, "[" + endTs + "] BUILD FAILED\n");
-                        
-                        result.setStatus(BuildResult.Status.FAILED);
-                        result.setEndTime(System.currentTimeMillis());
-                        finish(listener, result);
+                    public void onComplete(BuildResult buildResult) {
+                        if (listener != null) {
+                            listener.onBuildFinished(buildResult);
+                        }
                     }
                 });
-
             } catch (Exception e) {
+                if (listener != null) {
+                    listener.onLogAppended("❌ Build Error: " + e.getMessage());
+                }
                 result.setStatus(BuildResult.Status.FAILED);
-                result.setEndTime(System.currentTimeMillis());
-                // 🟢 Error အသေးစိတ်ကို Logcat သို့မဟုတ် UI Screen ပေါ်တွင် တိကျစွာ ပြသပေးမည်ဖြစ်သည်
-                emit(listener, "[ERROR] Unexpected build manager error: " + e.getMessage() + "\n");
-                finish(listener, result);
+                result.setErrorMessage(e.getMessage());
+                if (listener != null) {
+                    listener.onBuildFinished(result);
+                }
             }
         });
 
         return result;
     }
 
-    private void emit(BuildListener listener, String line) {
-        mainHandler.post(() -> {
-            if (listener != null) {
-                listener.onLogAppended(line);
-            }
-        });
-    }
-
-    private void finish(BuildListener listener, BuildResult result) {
-        mainHandler.post(() -> {
-            if (listener != null) {
-                listener.onBuildFinished(result);
-            }
-        });
+    /**
+     * Build process ကို ရပ်တန့်ခြင်း
+     */
+    public void stopBuild() {
+        executorService.shutdownNow();
+        executorService = Executors.newSingleThreadExecutor();
     }
 }
