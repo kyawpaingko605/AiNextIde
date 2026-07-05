@@ -17,25 +17,7 @@ android {
         // 🛠 Method Limit ကျော်ပြီး ဝင်ဝင်ချင်း Crash တာ ကာကွယ်ရန် MultiDex ဖွင့်ခြင်း
         multiDexEnabled true
 
-        // 🟢 [ဖြည့်စွက်ချက်] CPU Architectures ကန့်သတ်ချက်များ သတ်မှတ်ခြင်း
-        ndk {
-            abiFilters 'arm64-v8a', 'armeabi-v7a'
-        }
-
-        // 🟢 [ဖြည့်စွက်ချက်] C++ flags သတ်မှတ်ခြင်း
-        externalNativeBuild {
-            cmake {
-                cppFlags "-std=c++17 -frtti -fexceptions"
-            }
-        }
-    }
-
-    // 🟢 [ဖြည့်စွက်ချက်] CMake build script လမ်းကြောင်းအား ချိတ်ဆက်ခြင်း
-    externalNativeBuild {
-        cmake {
-            path file('src/main/cpp/CMakeLists.txt')
-            version '3.22.1'
-        }
+        // 🟢 [ပြင်ဆင်ချက်] CMake/NDK Block အဟောင်းများကို ဖယ်ထုတ်လိုက်ပါပြီ
     }
 
     buildTypes {
@@ -55,7 +37,7 @@ android {
         }
     }
 
-    // 🟢 [ဖြည့်စွက်ချက်] src/main/jniLibs ကို Gradle က သိအောင် လမ်းကြောင်းဖွင့်ပေးခြင်း
+    // 🟢 [အရေးကြီး] App ရဲ့ jniLibs directory ကို စနစ်တကျ ပြန်ဖွင့်ထားပေးရပါမည်
     sourceSets {
         main {
             jniLibs.srcDirs = ['src/main/jniLibs']
