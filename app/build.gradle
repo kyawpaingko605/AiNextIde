@@ -17,7 +17,18 @@ android {
         // 🛠 Method Limit ကျော်ပြီး ဝင်ဝင်ချင်း Crash တာ ကာကွယ်ရန် MultiDex ဖွင့်ခြင်း
         multiDexEnabled true
 
-        // 🟢 [ပြင်ဆင်ချက်] CMake/NDK Block အဟောင်းများကို ဖယ်ထုတ်လိုက်ပါပြီ
+        // 🟢 [ဖြည့်စွက်ချက်] ဖုန်းထဲတွင် Package ဆောက်သည့်အခါ ABI ရောထွေးပြီး ဖိုင်ပျောက်ဆုံးမှု မရှိစေရန် ကန့်သတ်ပေးခြင်း
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a'
+        }
+    }
+
+    // 🟢 [ဖြည့်စွက်ချက်] Universal APK တစ်ခုတည်းအဖြစ် ထွက်လာစေပြီး ဖိုင်များအားလုံး Extract လုပ်ခိုင်းသည့် စနစ်
+    splits {
+        abi {
+            enable false // Separate APKs ခွဲမထုတ်ဘဲ Fat APK တစ်ခုတည်းအဖြစ် ဆောက်ပါမည်
+            universalApk true
+        }
     }
 
     buildTypes {
@@ -33,11 +44,12 @@ android {
 
     packagingOptions {
         jniLibs {
+            // 🟢 အရေးကြီး: အချို့ဖုန်းများတွင် .so ဖိုင်များ ပျောက်ကွယ်မသွားဘဲ /data/ ထဲသို့ အတင်းဆွဲထုတ်ခိုင်းရန် true ထားရပါမည်
             useLegacyPackaging = true
         }
     }
 
-    // 🟢 [အရေးကြီး] App ရဲ့ jniLibs directory ကို စနစ်တကျ ပြန်ဖွင့်ထားပေးရပါမည်
+    // 🟢 App ရဲ့ jniLibs directory ကို စနစ်တကျ ချိတ်ဆက်ထားခြင်း
     sourceSets {
         main {
             jniLibs.srcDirs = ['src/main/jniLibs']
